@@ -1,0 +1,8 @@
+# The IntelliJ IDEA release that builds and tests the IntelliJ plugin when there is no local installation
+# (e.g. on CI; see intellij-plugin/build.gradle). It is here, as an ordinary library, so that Dependabot
+# (.github/dependabot.yml) can update it: it does not know the IntelliJ Platform Gradle Plugin's notation.
+[versions]
+intellij-idea = "2026.3"
+
+[libraries]
+intellij-idea = { module = "com.jetbrains.intellij.idea:idea", version.ref = "intellij-idea" }

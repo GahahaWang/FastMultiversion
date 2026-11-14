@@ -14,10 +14,10 @@ repositories {
 }
 
 // Builds against an installed IntelliJ IDEA (-PideaPath=... or the default installation below) if there is
-// one, otherwise (e.g. on CI) against the IntelliJ IDEA release ideaRelease (-PideaRelease=...), downloaded
-// from JetBrains' repository.
+// one, otherwise (e.g. on CI) against the IntelliJ IDEA release ideaRelease, downloaded from JetBrains'
+// repository: -PideaRelease=..., or the one in gradle/libs.versions.toml, which Dependabot keeps up to date.
 def ideaPath = (findProperty('ideaPath') ?: 'C:/Program Files/JetBrains/IntelliJ IDEA 2026.1.4').toString()
-def ideaRelease = (findProperty('ideaRelease') ?: '2026.3').toString()
+def ideaRelease = (findProperty('ideaRelease') ?: libs.versions.intellij.idea.get()).toString()
 
 configurations {
     // Libraries whose classes go into the plugin jar itself, so that the jar alone is a complete plugin:

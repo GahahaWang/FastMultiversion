@@ -1,0 +1,54 @@
+# Monthly dependency updates as pull requests to dev. Commits are "build(deps): ...", which semantic-release
+# does not release on its own: the updates ship with the next feat: or fix: release.
+#
+# The IntelliJ IDEA release the IntelliJ plugin is built and tested against on CI is in
+# gradle/libs.versions.toml; Dependabot finds its versions in JetBrains' repository.
+version: 2
+
+registries:
+  intellij-releases:
+    type: maven-repository
+    url: https://www.jetbrains.com/intellij-repository/releases
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    labels: []
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /
+    target-branch: dev
+    labels: []
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      semantic-release:
+        patterns: ["*"]
+    ignore:
+      # Version 10 and later may not generate release notes correctly:
+      # https://github.com/conventional-changelog/conventional-changelog/issues/1495
+      - dependency-name: conventional-changelog-conventionalcommits
+
+  - package-ecosystem: gradle
+    directory: /
+    target-branch: dev
+    registries:
+      - intellij-releases
+    labels: []
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: build
+      include: scope
