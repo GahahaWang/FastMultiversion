@@ -15,6 +15,7 @@ import com.intellij.lang.documentation.ide.IdeDocumentationTargetProvider;
 import com.intellij.lang.java.JavaDocumentationTarget;
 import com.intellij.openapi.application.WriteAction;
 import com.intellij.openapi.editor.colors.EditorColorsManager;
+import com.intellij.openapi.editor.colors.EditorColorsScheme;
 import com.intellij.openapi.editor.colors.TextAttributesKey;
 import com.intellij.openapi.editor.markup.TextAttributes;
 import com.intellij.openapi.module.ModifiableModuleModel;
@@ -37,6 +38,7 @@ import com.intellij.testFramework.fixtures.JavaCodeInsightTestFixture;
 import com.intellij.testFramework.fixtures.JavaTestFixtureFactory;
 import com.intellij.testFramework.fixtures.TestFixtureBuilder;
 import java.awt.Color;
+import java.awt.Font;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -437,26 +439,22 @@ public class VersionViewTest extends UsefulTestCase {
         assertTrue(path(documented), path(documented).contains("/mc-26.1/"));
     }
 
-    public void testColorsNamesOfInactiveCodeAsTheIdeDoes() {
+    public void testColorsNamesOfInactiveCodeWithTheColorScheme() {
         myFixture.configureByText("Compat.java", COMPAT);
         List<HighlightInfo> infos = myFixture.doHighlighting(); // names have a severity below INFORMATION
-        // 26.1's setScreen gets the color of a method call, as the IDE gives 26.2's in the active branch.
-        Object activeCall = color(infos, "mc.gui.setScreen(screen)", "setScreen");
-        assertNotNull(describe(infos), activeCall);
-        assertEquals(activeCall, color(infos, "mc.setScreen(screen)", "setScreen"));
-        // 26.1's fields get the color of an instance field.
-        Color field = foreground(JavaHighlightingColors.INSTANCE_FIELD_ATTRIBUTES);
-        assertNotNull(field);
-        assertEquals(field, foreground(color(infos, ": mc.screen", "screen")));
-        assertEquals(field, foreground(color(infos, "mc.options.hideGui", "options")));
-        assertEquals(field, foreground(color(infos, "mc.options.hideGui", "hideGui")));
-    }
+        // 26.1's setScreen is a method call, as the IDE has 26.2's in the active branch; 26.1's fields are instance fields.
+        assertEquals(JavaHighlightingColors.METHOD_CALL_ATTRIBUTES, key(info(infos, "mc.gui.setScreen(screen)", "setScreen")));
+        HighlightInfo setScreen = info(infos, "mc.setScreen(screen)", "setScreen");
+        assertEquals(JavaHighlightingColors.METHOD_CALL_ATTRIBUTES, key(setScreen));
+        assertEquals(JavaHighlightingColors.INSTANCE_FIELD_ATTRIBUTES, key(info(infos, ": mc.screen", "screen")));
+        assertEquals(JavaHighlightingColors.INSTANCE_FIELD_ATTRIBUTES, key(info(infos, "mc.options.hideGui", "options")));
+        assertEquals(JavaHighlightingColors.INSTANCE_FIELD_ATTRIBUTES, key(info(infos, "mc.options.hideGui", "hideGui")));
 
-    /** The text color of a color scheme key or of attributes. */
-    private static Color foreground(Object color) {
-        TextAttributes attributes = color instanceof TextAttributesKey key
-                ? EditorColorsManager.getInstance().getGlobalScheme().getAttributes(key) : (TextAttributes) color;
-        return attributes == null ? null : attributes.getForegroundColor();
+        // Keys, not colors: the editor's color scheme (e.g. a theme's) decides the colors.
+        assertNull(setScreen.forcedTextAttributes);
+        EditorColorsScheme theme = (EditorColorsScheme) EditorColorsManager.getInstance().getGlobalScheme().clone();
+        theme.setAttributes(JavaHighlightingColors.METHOD_CALL_ATTRIBUTES, new TextAttributes(Color.RED, null, null, null, Font.PLAIN));
+        assertEquals(Color.RED, setScreen.getTextAttributes(null, theme).getForegroundColor());
     }
 
     public void testCompletesTheMembersOfTheBranchVersion() {
@@ -549,30 +547,23 @@ public class VersionViewTest extends UsefulTestCase {
         return infos.stream().map(i -> "'" + text(i) + "': " + i.getDescription()).toList().toString();
     }
 
-    /**
-     * The color of {@code name} in the first {@code code} of the file: a key of the color scheme, or attributes;
-     * {@code null} if it has none.
-     */
-    private Object color(List<HighlightInfo> infos, String code, String name) {
+    /** The highlight (below warnings) of {@code name} in the first {@code code} of the file. */
+    private HighlightInfo info(List<HighlightInfo> infos, String code, String name) {
         int start = myFixture.getFile().getText().indexOf(code);
         assertTrue(code, start >= 0);
         start += code.indexOf(name);
-        TextRange range = TextRange.from(start, name.length());
         for (HighlightInfo info : infos) {
-            if (info.getStartOffset() == range.getStartOffset() && info.getEndOffset() == range.getEndOffset()
+            if (info.getStartOffset() == start && info.getEndOffset() == start + name.length()
                     && info.getSeverity().compareTo(HighlightSeverity.WARNING) < 0) {
-                if (info.forcedTextAttributes != null) {
-                    return info.forcedTextAttributes;
-                }
-                if (info.forcedTextAttributesKey != null) {
-                    return info.forcedTextAttributesKey;
-                }
-                if (info.type.getAttributesKey() != null) {
-                    return info.type.getAttributesKey();
-                }
+                return info;
             }
         }
-        return null;
+        throw new AssertionError("no highlight of " + name + " in " + code + ": " + describe(infos));
+    }
+
+    /** The color scheme key of a highlight. */
+    private static TextAttributesKey key(HighlightInfo info) {
+        return info.forcedTextAttributesKey != null ? info.forcedTextAttributesKey : info.type.getAttributesKey();
     }
 
     private void assertError(List<HighlightInfo> errors, String highlighted, String descriptionStart) {

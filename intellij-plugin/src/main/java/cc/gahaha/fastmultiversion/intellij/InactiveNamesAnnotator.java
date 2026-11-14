@@ -4,13 +4,11 @@ import com.intellij.codeInsight.daemon.impl.HighlightInfo;
 import com.intellij.codeInsight.daemon.impl.HighlightInfoType;
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightInfoHolder;
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightNamesUtil;
-import com.intellij.lang.annotation.AnnotationBuilder;
 import com.intellij.lang.annotation.AnnotationHolder;
 import com.intellij.lang.annotation.Annotator;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.colors.TextAttributesKey;
-import com.intellij.openapi.editor.markup.TextAttributes;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
@@ -34,17 +32,17 @@ import org.jetbrains.annotations.Nullable;
  * a name that only other versions have, such as {@code Minecraft.setScreen} of 26.1.2, would stay plain. For
  * such names, the IDE's own name highlighting runs on the {@link VersionViews view} of the newest version the
  * code runs in, where they resolve.
+ *
+ * <p>A name gets the key of the color scheme that the IDE picks for it (e.g. {@code INSTANCE_FIELD_ATTRIBUTES}),
+ * not colors: the editor looks the key up in its color scheme, so the colors are those of the scheme in use,
+ * a theme's included, as for the IDE's own names.
  */
 public final class InactiveNamesAnnotator implements Annotator {
     private static final Logger LOG = Logger.getInstance(InactiveNamesAnnotator.class);
     private static final Key<Names> NAMES = Key.create("multiversion.inactiveNames");
 
-    /** How a name is colored: a key of the color scheme, or the attributes the IDE made for it (e.g. merged keys). */
-    private record Color(@Nullable TextAttributesKey key, @Nullable TextAttributes attributes) {
-    }
-
-    /** The colored names of a file, with the PSI modification count and setup they were found with. */
-    private record Names(long stamp, MultiversionProject.State state, Map<TextRange, Color> colors) {
+    /** The keys of the names of a file, with the PSI modification count and setup they were found with. */
+    private record Names(long stamp, MultiversionProject.State state, Map<TextRange, TextAttributesKey> keys) {
     }
 
     @Override
@@ -52,17 +50,15 @@ public final class InactiveNamesAnnotator implements Annotator {
         if (!(element instanceof PsiIdentifier) || !(element.getContainingFile() instanceof PsiJavaFile file)) {
             return;
         }
-        Color color = colors(file).get(element.getTextRange());
-        if (color == null) {
-            return;
+        TextAttributesKey key = keys(file).get(element.getTextRange());
+        if (key != null) {
+            // The severity of the IDE's own name colors.
+            holder.newSilentAnnotation(HighlightInfoType.SYMBOL_TYPE_SEVERITY).range(element).textAttributes(key).create();
         }
-        // The severity of the IDE's own name colors.
-        AnnotationBuilder builder = holder.newSilentAnnotation(HighlightInfoType.SYMBOL_TYPE_SEVERITY).range(element);
-        (color.attributes() != null ? builder.enforcedTextAttributes(color.attributes()) : builder.textAttributes(color.key())).create();
     }
 
-    /** The names of {@code file} to color, by their range; found once per change of the code or the setup. */
-    private static Map<TextRange, Color> colors(PsiJavaFile file) {
+    /** The keys of the names of {@code file} to color, by their range; found once per change of the code or the setup. */
+    private static Map<TextRange, TextAttributesKey> keys(PsiJavaFile file) {
         MultiversionProject.State state = MultiversionProject.getInstance(file.getProject()).state();
         if (state == null) {
             return Map.of();
@@ -73,14 +69,14 @@ public final class InactiveNamesAnnotator implements Annotator {
             names = new Names(stamp, state, find(file, state));
             file.putUserData(NAMES, names);
         }
-        return names.colors();
+        return names.keys();
     }
 
-    private static Map<TextRange, Color> find(PsiJavaFile file, MultiversionProject.State state) {
+    private static Map<TextRange, TextAttributesKey> find(PsiJavaFile file, MultiversionProject.State state) {
         Guards guards = new Guards(state.db());
         Set<Integer> versions = new TreeSet<>();
         guards.inactiveVersions(file, guards.all(), state.activeBit(), versions);
-        Map<TextRange, Color> colors = new HashMap<>();
+        Map<TextRange, TextAttributesKey> keys = new HashMap<>();
         PsiJavaFile original = file.getOriginalFile() instanceof PsiJavaFile o ? o : file;
         for (int version : versions) {
             PsiJavaFile view = VersionViews.of(state, original, version);
@@ -102,25 +98,26 @@ public final class InactiveNamesAnnotator implements Annotator {
             for (int i = 0; i < infos.size(); i++) {
                 HighlightInfo info = infos.get(i);
                 TextRange range = TextRange.create(info.getStartOffset(), info.getEndOffset());
-                Color color = color(info);
+                TextAttributesKey key = key(info);
                 // A view has the file's text, so the same offsets; names that resolve in the file are colored by the IDE.
-                if (color != null && !colors.containsKey(range) && isUnresolvedName(file, range)) {
-                    colors.put(range, color);
+                if (key != null && !keys.containsKey(range) && isUnresolvedName(file, range)) {
+                    keys.put(range, key);
                 }
             }
         }
-        return colors;
+        return keys;
     }
 
-    private static @Nullable Color color(HighlightInfo info) {
+    /**
+     * The key of a name's color: the type of the IDE's highlight says what the name is (a method call, an
+     * instance field, ...). Its colors are left out: the IDE made them with the view's color scheme, which is not
+     * necessarily the editor's.
+     */
+    private static @Nullable TextAttributesKey key(HighlightInfo info) {
         if (info.getSeverity().compareTo(HighlightSeverity.WARNING) >= 0) {
             return null;
         }
-        if (info.forcedTextAttributes != null) {
-            return new Color(null, info.forcedTextAttributes);
-        }
-        TextAttributesKey key = info.forcedTextAttributesKey != null ? info.forcedTextAttributesKey : info.type.getAttributesKey();
-        return key == null ? null : new Color(key, null);
+        return info.forcedTextAttributesKey != null ? info.forcedTextAttributesKey : info.type.getAttributesKey();
     }
 
     /** Whether {@code range} is exactly the name of a reference that resolves to nothing in {@code file}. */
