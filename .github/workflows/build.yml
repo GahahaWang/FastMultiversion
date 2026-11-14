@@ -1,0 +1,75 @@
+# Builds and tests every module on each push and pull request. The IntelliJ plugin is built against IntelliJ
+# IDEA downloaded from JetBrains (no local installation here) and uploaded as an artifact. Tests that need
+# Minecraft jars from a local Loom cache are skipped.
+#
+# After a push to dev builds, opens a pull request from dev to master, unless one is open already or master
+# has everything dev has. That needs the repository setting "Allow GitHub Actions to create and approve pull
+# requests" (Settings → Actions → General → Workflow permissions).
+name: Build
+
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+    branches: [dev, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build and test
+        run: ./gradlew build :intellij-plugin:buildPlugin
+
+      - name: Upload the IntelliJ plugin
+        uses: actions/upload-artifact@v7
+        with:
+          name: intellij-plugin
+          path: intellij-plugin/build/distributions/*.zip
+          if-no-files-found: error
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-reports
+          path: '**/build/reports/tests/'
+
+  open-pull-request:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Open a pull request from dev to master
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          open=$(gh pr list --head dev --base master --state open --json number --jq 'length')
+          if [ "$open" != "0" ]; then
+            echo "A pull request from dev to master is open already."
+            exit 0
+          fi
+          ahead=$(gh api "repos/$GH_REPO/compare/master...dev" --jq '.ahead_by')
+          if [ "$ahead" = "0" ]; then
+            echo "master has everything dev has."
+            exit 0
+          fi
+          commits=$(gh api "repos/$GH_REPO/compare/master...dev" --jq '.commits[] | "- " + (.commit.message | split("\n")[0])')
+          gh pr create --head dev --base master --title "Merge dev into master" \
+            --body "$(printf 'Commits on dev that master does not have yet:\n\n%s\n' "$commits")"

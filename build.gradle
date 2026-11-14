@@ -7,10 +7,24 @@ subprojects {
     apply plugin: 'java-library'
 
     group = 'cc.gahaha'
-    version = '0.1.0-SNAPSHOT'
+    // A release sets its version with -PreleaseVersion=... (see .github/workflows/release.yml).
+    version = findProperty('releaseVersion') ?: '0.1.0-SNAPSHOT'
 
     repositories {
         mavenCentral()
+    }
+
+    // Besides Maven Local, every published module can go to build/repo: a Maven repository directory that a
+    // release ships as a zip (publishAllPublicationsToReleaseRepository).
+    plugins.withId('maven-publish') {
+        publishing {
+            repositories {
+                maven {
+                    name = 'release'
+                    url = rootProject.layout.buildDirectory.dir('repo')
+                }
+            }
+        }
     }
 
     java {
