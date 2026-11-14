@@ -20,21 +20,47 @@ if (Mc.is("[26.2,)")) {
 
 ## Installation
 
-FastMultiversion is not published to a repository yet. Install it into your local Maven repository from this
-repository:
+### From a release
+
+Each [release](https://github.com/GahahaWang/FastMultiversion/releases) has two files:
+
+- `fastmultiversion-<version>-maven-repository.zip`: the Gradle plugin. Unzip it into your mod, e.g. to
+  `libs/fastmultiversion-repo`, and add it to the plugin repositories in `settings.gradle`:
+
+  ```groovy
+  pluginManagement {
+      repositories {
+          maven { url = file('libs/fastmultiversion-repo') }
+          mavenCentral()
+          gradlePluginPortal()
+      }
+  }
+
+  plugins {
+      id 'cc.gahaha.fastmultiversion' version '<version>'
+  }
+  ```
+
+- `fastmultiversion-intellij-plugin-<version>.zip`: the IntelliJ plugin. Install it with
+  **Settings → Plugins → ⚙ → Install Plugin from Disk…** and restart the IDE.
+
+### From source
+
+Install the Gradle plugin into your local Maven repository, as version `0.1.0-SNAPSHOT`, and add `mavenLocal()`
+to the plugin repositories instead:
 
 ```shell
 ./gradlew publishToMavenLocal
 ```
 
-To build the IntelliJ plugin, point `ideaPath` at your IntelliJ IDEA installation:
+To build the IntelliJ plugin, point `ideaPath` at your IntelliJ IDEA installation. Without one, the build
+downloads IntelliJ IDEA 2026.3:
 
 ```shell
 ./gradlew :intellij-plugin:buildPlugin -PideaPath="C:/Program Files/JetBrains/IntelliJ IDEA 2026.3"
 ```
 
-Then install `intellij-plugin/build/distributions/intellij-plugin-0.1.0-SNAPSHOT.zip` with
-**Settings → Plugins → ⚙ → Install Plugin from Disk…** and restart the IDE.
+The plugin is then `intellij-plugin/build/distributions/intellij-plugin-0.1.0-SNAPSHOT.zip`.
 
 ## Setting up a mod
 
@@ -43,7 +69,7 @@ Then install `intellij-plugin/build/distributions/intellij-plugin-0.1.0-SNAPSHOT
 ```groovy
 pluginManagement {
     repositories {
-        mavenLocal()
+        mavenLocal()    // or the release repository, see Installation
         maven { url = "https://maven.fabricmc.net/" }
         maven { url = "https://maven.neoforged.net/releases" }
         gradlePluginPortal()

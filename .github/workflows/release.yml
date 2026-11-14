@@ -1,0 +1,56 @@
+# Pushing a tag such as v0.1.0 (on a commit of master) builds and tests that version and creates a GitHub
+# release with:
+#   - fastmultiversion-<version>-maven-repository.zip: the Gradle plugin and its libraries as a Maven
+#     repository directory, to use from pluginManagement.repositories;
+#   - fastmultiversion-intellij-plugin-<version>.zip: the IntelliJ plugin.
+# A version with a '-' (e.g. v0.2.0-beta.1) is marked as a pre-release.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check that the tag is on master
+        run: |
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::$GITHUB_REF_NAME is not on master; tag a commit of master."
+            exit 1
+          fi
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Build, test and publish
+        run: ./gradlew build :intellij-plugin:buildPlugin publishAllPublicationsToReleaseRepository -PreleaseVersion="${GITHUB_REF_NAME#v}"
+
+      - name: Package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p build/release
+          (cd build/repo && zip -qr "../release/fastmultiversion-$version-maven-repository.zip" .)
+          cp intellij-plugin/build/distributions/intellij-plugin-"$version".zip "build/release/fastmultiversion-intellij-plugin-$version.zip"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          prerelease=""
+          case "$version" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" build/release/*.zip \
+            --title "FastMultiversion $version" --generate-notes $prerelease
