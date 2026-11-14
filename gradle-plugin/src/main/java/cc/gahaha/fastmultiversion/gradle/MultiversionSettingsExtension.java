@@ -13,14 +13,18 @@ import org.gradle.api.provider.Property;
  *     versions '26.1', '26.2', '26.3'
  *     active = '26.3'                    // optional; also -Pmultiversion.active=...; default: the newest
  *
- *     // Either one project per version, running version.gradle:
+ *     // Either one project per version, running gradle/version/version.gradle:
  *     versionScript = 'version.gradle'   // optional
  *
- *     // or one project per version and loader, e.g. :26.2:fabric, running fabric.gradle:
+ *     // or one project per version and loader, e.g. :26.2:fabric, running gradle/fabric/fabric.gradle:
  *     loaders 'fabric', 'neoforge'
  *     activeLoader = 'fabric'            // optional; also -Pmultiversion.activeLoader=...; default: the first
  * }
  * </pre>
+ *
+ * <p>Each kind of project runs one build script, {@code gradle/<kind>/<kind>.gradle}, or {@code <kind>.gradle} in
+ * the root directory. In its own directory the IDE resolves the script against the active version's project of
+ * that kind, so it knows the plugins the script applies; in the root directory it does not.
  *
  * <p>With loaders, a {@code common.gradle} next to the loader scripts adds a project {@code :<version>:common}
  * per version that compiles {@code src/main} against Minecraft without a loader (it sets up Minecraft and the
@@ -42,7 +46,8 @@ public abstract class MultiversionSettingsExtension {
 
     /**
      * The mod loaders, for a mod built for several loaders. Each version then gets one project per loader,
-     * which runs {@code <loader>.gradle} and compiles {@code src/main} plus {@code src/<loader>}.
+     * which runs {@code gradle/<loader>/<loader>.gradle} (or {@code <loader>.gradle}) and compiles {@code src/main}
+     * plus {@code src/<loader>}.
      */
     public void loaders(String... loaders) {
         this.loaders.addAll(List.of(loaders));
@@ -58,6 +63,9 @@ public abstract class MultiversionSettingsExtension {
     /** The loader whose project gets {@code src/main} in the IDE. */
     public abstract Property<String> getActiveLoader();
 
-    /** The build script, relative to the root directory, that every version project runs (without loaders). */
+    /**
+     * The build script, relative to the root directory, that every version project runs (without loaders).
+     * Default: {@code gradle/version/version.gradle}, or {@code version.gradle}.
+     */
     public abstract Property<String> getVersionScript();
 }

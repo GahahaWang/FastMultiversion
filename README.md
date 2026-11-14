@@ -98,25 +98,29 @@ All settings of the `multiversion` block:
 | `loaders 'fabric', 'neoforge'` | One project per version and loader. Optional. |
 | `active = '26.2'` | The version the IDE works with. Default: the newest. |
 | `activeLoader = 'fabric'` | The loader the IDE works with. Default: the first. |
-| `versionScript = 'version.gradle'` | Build script of each version project, without loaders. Default: `version.gradle`. |
+| `versionScript = 'version.gradle'` | Build script of each version project, without loaders. Default: `gradle/version/version.gradle`. |
 
 ### Project layout
 
 ```text
 settings.gradle
-build.gradle          loader plugins, declared with `apply false`
-common.gradle         with several loaders: Minecraft without a loader, for the shared code
-fabric.gradle         the build script of every :<version>:fabric project
-neoforge.gradle       the build script of every :<version>:neoforge project
-src/main/             code shared by all loaders
-src/fabric/           Fabric-only code
-src/neoforge/         NeoForge-only code
-versions/             one directory per version and loader, created for you
+build.gradle                      loader plugins, declared with `apply false`
+gradle/common/common.gradle       with several loaders: Minecraft without a loader, for the shared code
+gradle/fabric/fabric.gradle       the build script of every :<version>:fabric project
+gradle/neoforge/neoforge.gradle   the build script of every :<version>:neoforge project
+src/main/                         code shared by all loaders
+src/fabric/                       Fabric-only code
+src/neoforge/                     NeoForge-only code
+versions/                         one directory per version and loader, created for you
 ```
 
 FastMultiversion creates a Gradle project for each version and loader, such as `:26.2:fabric` in
-`versions/26.2/fabric`. Each of these projects runs `fabric.gradle`. Without loaders there is one project per
-version, such as `:26.2` in `versions/26.2`, running `version.gradle`.
+`versions/26.2/fabric`. Each of these projects runs `gradle/fabric/fabric.gradle`. Without loaders there is
+one project per version, such as `:26.2` in `versions/26.2`, running `gradle/version/version.gradle`.
+
+Keep each build script in its own directory under `gradle/`: there, IntelliJ IDEA knows the plugins the
+script applies and completes and checks `loom { }`, `minecraft`, `multiversion` and so on. A script can also
+be in the root directory, such as `fabric.gradle`, but there the IDE cannot resolve them.
 
 Declare the loader plugins once in the root `build.gradle`, so that all version projects share them:
 
