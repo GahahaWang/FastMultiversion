@@ -1,0 +1,41 @@
+<idea-plugin>
+    <id>cc.gahaha.fastmultiversion</id>
+    <name>FastMultiversion</name>
+    <vendor>gahaha</vendor>
+    <description><![CDATA[
+    Support for Minecraft mods built for several Minecraft versions from one source tree with
+    <code>Mc.is("range")</code> and <code>@IfMc("range")</code>:
+    <ul>
+      <li>reports, as you type, Minecraft API used in code that also runs in versions without it,
+          with quick fixes to guard it;</li>
+      <li>resolves code that does not run in the active Minecraft version against the version it runs in:
+          its errors, Go to Declaration, Quick Documentation and member completion use that version's
+          Minecraft, not the active one's.</li>
+    </ul>
+    Needs the multiversion Gradle plugin, which writes build/multiversion/project.properties and the API
+    database (task <code>generateApiDatabase</code>).
+    ]]></description>
+
+    <depends>com.intellij.modules.java</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <localInspection language="JAVA"
+                         shortName="McApiRange"
+                         displayName="Minecraft API used outside the versions that have it"
+                         groupName="FastMultiversion"
+                         enabledByDefault="true"
+                         level="ERROR"
+                         implementationClass="cc.gahaha.fastmultiversion.intellij.McApiRangeInspection"/>
+        <daemon.highlightInfoFilter implementation="cc.gahaha.fastmultiversion.intellij.InactiveCodeHighlightFilter"/>
+
+        <!-- Code that does not run in the active version, resolved in a view of the version it runs in. -->
+        <resolveScopeProvider order="first" implementation="cc.gahaha.fastmultiversion.intellij.VersionViewResolveScopeProvider"/>
+        <gotoDeclarationHandler order="first" implementation="cc.gahaha.fastmultiversion.intellij.InactiveGotoDeclarationHandler"/>
+        <lang.documentationProvider language="JAVA" order="first"
+                                    implementationClass="cc.gahaha.fastmultiversion.intellij.InactiveDocumentationProvider"/>
+        <completion.contributor language="JAVA" order="first"
+                                implementationClass="cc.gahaha.fastmultiversion.intellij.InactiveCompletionContributor"/>
+        <completion.contributor language="JAVA" order="first"
+                                implementationClass="cc.gahaha.fastmultiversion.intellij.RangeCompletionContributor"/>
+    </extensions>
+</idea-plugin>

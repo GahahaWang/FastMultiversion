@@ -1,0 +1,16 @@
+// The Minecraft API availability database: which classes and members exist in which versions, with
+// their access flags, generic signatures and supertypes. Read by the javac plugin and the IDE plugin.
+
+dependencies {
+    api project(':versioning')
+}
+
+apply plugin: 'maven-publish'
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
+    }
+}

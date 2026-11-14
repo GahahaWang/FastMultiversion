@@ -1,0 +1,67 @@
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
+
+// The IntelliJ plugin: the range check as you type, quick fixes, and code of inactive versions resolved
+// against the version it runs in.
+plugins {
+    id 'org.jetbrains.intellij.platform' version '2.20.1'
+}
+
+repositories {
+    mavenCentral()
+    intellijPlatform {
+        defaultRepositories()
+    }
+}
+
+// Builds against an installed IntelliJ IDEA: -PideaPath=... or the default installation below.
+def ideaPath = (findProperty('ideaPath') ?: 'C:/Program Files/JetBrains/IntelliJ IDEA 2026.1.4').toString()
+
+configurations {
+    // Libraries whose classes go into the plugin jar itself, so that the jar alone is a complete plugin:
+    // installing build/libs/*.jar instead of the distribution zip must not lose them.
+    bundled {
+        canBeConsumed = false
+        attributes { attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME)) }
+    }
+}
+
+dependencies {
+    compileOnly project(':apidb')
+    compileOnly project(':versioning')
+    bundled project(':apidb')
+    bundled project(':versioning')
+    testImplementation project(':apidb')
+    testImplementation project(':versioning')
+    testImplementation project(':apidb-generator')
+
+    intellijPlatform {
+        local(ideaPath)
+        bundledPlugin('com.intellij.java')
+        testFramework(TestFrameworkType.Platform.INSTANCE)
+        testFramework(TestFrameworkType.Plugin.Java.INSTANCE)
+    }
+
+    // The fixture tests are JUnit 3 style.
+    testImplementation 'junit:junit:4.13.2'
+    testRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
+}
+
+intellijPlatform {
+    buildSearchableOptions = false
+    pluginConfiguration {
+        id = 'cc.gahaha.fastmultiversion'
+        name = 'FastMultiversion'
+        version = project.version
+        ideaVersion {
+            sinceBuild = '263'
+        }
+    }
+}
+
+tasks.named('jar', Jar) {
+    def bundledJars = configurations.bundled
+    inputs.files(bundledJars).withPropertyName('bundledJars')
+    from({ bundledJars.collect { zipTree(it) } }) {
+        exclude 'META-INF/MANIFEST.MF'
+    }
+}

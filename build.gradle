@@ -1,0 +1,35 @@
+// The javac plugin rewrites javac's trees, so any JVM running it needs javac internals that jdk.compiler does not export.
+ext.javacExports = ['api', 'code', 'tree', 'util'].collect {
+    "--add-exports=jdk.compiler/com.sun.tools.javac.${it}=ALL-UNNAMED".toString()
+}
+
+subprojects {
+    apply plugin: 'java-library'
+
+    group = 'cc.gahaha'
+    version = '0.1.0-SNAPSHOT'
+
+    repositories {
+        mavenCentral()
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(25)
+        }
+    }
+
+    dependencies {
+        testImplementation platform('org.junit:junit-bom:6.0.0')
+        testImplementation 'org.junit.jupiter:junit-jupiter'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+
+    tasks.withType(Test).configureEach {
+        useJUnitPlatform()
+    }
+}

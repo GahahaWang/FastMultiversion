@@ -1,0 +1,24 @@
+// A javac plugin (-Xplugin:"FastMultiversion target=<version> [apidb=<file>]") that prunes Mc.is branches and @IfMc
+// declarations right after parsing, so that javac compiles exactly the program for one Minecraft version,
+// and, given an API database, checks that kept code only uses Minecraft API where every version it runs in has it.
+apply plugin: 'java-test-fixtures'
+
+dependencies {
+    implementation project(':versioning')
+    implementation project(':apidb')
+    testImplementation project(':annotations')
+    testImplementation project(':apidb-generator')
+
+    // TestCompiler: compiles sources in-process with the plugin.
+    testFixturesImplementation platform('org.junit:junit-bom:6.0.0')
+    testFixturesImplementation 'org.junit.jupiter:junit-jupiter-api'
+}
+
+tasks.named('compileJava', JavaCompile) {
+    options.compilerArgs += rootProject.javacExports
+}
+
+tasks.named('test', Test) {
+    // Tests run javac in-process, so the test JVM must export the same packages.
+    jvmArgs rootProject.javacExports
+}

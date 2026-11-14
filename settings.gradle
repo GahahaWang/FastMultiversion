@@ -1,0 +1,10 @@
+rootProject.name = 'FastMultiversion'
+
+include 'annotations'
+include 'versioning'
+include 'javac-plugin'
+include 'apidb'
+include 'apidb-generator'
+
+include 'gradle-plugin'
+include 'intellij-plugin'

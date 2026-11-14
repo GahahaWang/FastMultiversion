@@ -1,0 +1,582 @@
+package cc.gahaha.fastmultiversion.intellij;
+
+import cc.gahaha.fastmultiversion.apidb.ApiDatabase;
+import cc.gahaha.fastmultiversion.apidb.generator.ApiDbGenerator;
+import cc.gahaha.fastmultiversion.apidb.generator.VersionJars;
+import cc.gahaha.fastmultiversion.versioning.McVersion;
+import com.intellij.codeInsight.daemon.impl.HighlightInfo;
+import com.intellij.codeInsight.lookup.Lookup;
+import com.intellij.codeInsight.lookup.LookupElement;
+import com.intellij.codeInsight.lookup.LookupElementPresentation;
+import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler;
+import com.intellij.lang.annotation.HighlightSeverity;
+import com.intellij.lang.documentation.ide.IdeDocumentationTargetProvider;
+import com.intellij.lang.java.JavaDocumentationTarget;
+import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.module.ModifiableModuleModel;
+import com.intellij.openapi.module.Module;
+import com.intellij.openapi.module.ModuleManager;
+import com.intellij.openapi.util.TextRange;
+import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess;
+import com.intellij.platform.backend.documentation.DocumentationTarget;
+import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiMethod;
+import com.intellij.psi.PsiParameter;
+import com.intellij.testFramework.IndexingTestUtil;
+import com.intellij.codeInspection.TextBlockMigrationInspection;
+import com.siyeh.ig.style.UnnecessarySemicolonInspection;
+import com.intellij.testFramework.UsefulTestCase;
+import com.intellij.testFramework.builders.JavaModuleFixtureBuilder;
+import com.intellij.testFramework.fixtures.IdeaProjectTestFixture;
+import com.intellij.testFramework.fixtures.IdeaTestFixtureFactory;
+import com.intellij.testFramework.fixtures.JavaCodeInsightTestFixture;
+import com.intellij.testFramework.fixtures.JavaTestFixtureFactory;
+import com.intellij.testFramework.fixtures.TestFixtureBuilder;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
+import java.util.stream.Stream;
+import javax.tools.JavaCompiler;
+import javax.tools.ToolProvider;
+
+/**
+ * Code that does not run in the active version, resolved in the version it runs in. The project is laid
+ * out like a synced multiversion project: the main module (the active version, 26.2) owns the sources and
+ * has 26.2's Minecraft; the module {@code EntityCount.26_1.main} (the project {@code :26.1}) has 26.1's.
+ * In 26.1 the screen is {@code mc.screen} / {@code mc.setScreen}; in 26.2 it moved to {@code mc.gui}.
+ */
+public class VersionViewTest extends UsefulTestCase {
+    private static final String COMPAT = """
+            import cc.gahaha.fastmultiversion.Mc;
+            import mc.*;
+            class Compat {
+                static Screen screen(Minecraft mc) {
+                    return Mc.is("[26.2,)") ? mc.gui.screen() : mc.screen;
+                }
+                static void setScreen(Minecraft mc, Screen screen) {
+                    if (Mc.is("[26.2,)")) {
+                        mc.gui.setScreen(screen);
+                    } else {
+                        mc.setScreen(screen);
+                    }
+                }
+                static boolean hidden(Minecraft mc) {
+                    return !Mc.is("[26.2,)") && mc.options.hideGui;
+                }
+            }
+            """;
+
+    private static Path libraries;
+    private static ApiDatabase database;
+    private JavaCodeInsightTestFixture myFixture;
+
+    @Override
+    protected void setUp() throws Exception {
+        super.setUp();
+        Path libraries = libraries();
+        VfsRootAccess.allowRootAccess(getTestRootDisposable(), libraries.toString());
+
+        TestFixtureBuilder<IdeaProjectTestFixture> project = IdeaTestFixtureFactory.getFixtureFactory().createFixtureBuilder(getName());
+        myFixture = JavaTestFixtureFactory.getFixtureFactory().createCodeInsightFixture(project.getFixture());
+        JavaModuleFixtureBuilder<?> active = project.addModule(JavaModuleFixtureBuilder.class);
+        active.addSourceContentRoot(myFixture.getTempDirPath());
+        active.addJdk(System.getProperty("java.home"));
+        active.addLibrary("mc-26.2", libraries.resolve("mc-26.2").toString());
+        JavaModuleFixtureBuilder<?> old = project.addModule(JavaModuleFixtureBuilder.class);
+        old.addJdk(System.getProperty("java.home"));
+        old.addLibrary("mc-26.1", libraries.resolve("mc-26.1").toString());
+        myFixture.setUp();
+
+        Module oldModule = old.getFixture().getModule();
+        WriteAction.runAndWait(() -> {
+            ModifiableModuleModel model = ModuleManager.getInstance(myFixture.getProject()).getModifiableModel();
+            model.renameModule(oldModule, "EntityCount.26_1.main");
+            model.commit();
+        });
+        IndexingTestUtil.waitUntilIndexesAreReady(myFixture.getProject());
+
+        myFixture.addClass("""
+                package cc.gahaha.fastmultiversion;
+                public final class Mc { private Mc() {} public static boolean is(String range) { return false; } }
+                """);
+        myFixture.addClass("""
+                package cc.gahaha.fastmultiversion;
+                public @interface IfMc { String value(); }
+                """);
+        MultiversionProject.getInstance(myFixture.getProject()).setForTests(database, McVersion.parse("26.2"));
+        myFixture.enableInspections(new McApiRangeInspection());
+    }
+
+    @Override
+    protected void tearDown() throws Exception {
+        try {
+            MultiversionProject.getInstance(myFixture.getProject()).setForTests(null, null);
+            myFixture.tearDown();
+        } catch (Throwable e) {
+            addSuppressedException(e);
+        } finally {
+            myFixture = null;
+            super.tearDown();
+        }
+    }
+
+    public void testChecksInactiveCodeAgainstItsVersion() {
+        myFixture.configureByText("Compat.java", COMPAT);
+        assertEmpty(describe(errors()), errors());
+
+        myFixture.configureByText("Typos.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.*;
+                class Typos {
+                    static Object screen(Minecraft mc) {
+                        return Mc.is("[26.2,)") ? mc.gui.screen() : mc.scren;
+                    }
+                    static void setScreen(Minecraft mc, Screen screen) {
+                        if (Mc.is("[26.2,)")) {
+                            mc.gui.setScren(screen);
+                        } else {
+                            mc.setScren(screen);
+                            mc.gui.setScreen(screen);
+                        }
+                    }
+                }
+                """);
+        List<HighlightInfo> errors = errors();
+        assertError(errors, "scren", "[26.1] Cannot resolve symbol 'scren'");
+        assertError(errors, "setScren", "[26.1] Cannot resolve method 'setScren' in 'Minecraft'");
+        assertError(errors, "gui", "[26.1] Cannot resolve symbol 'gui'"); // 26.2's API in the 26.1 branch
+        assertError(errors, "setScren", "Cannot resolve method 'setScren' in 'Gui'"); // the active branch, as usual
+        assertEquals(describe(errors), 4, errors.size());
+    }
+
+    public void testImportsAClassThatOnlyAnotherVersionHas() {
+        myFixture.configureByText("Imports.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.Minecraft;
+                import mc.Options;
+                class Imports {
+                    static boolean hidden(Minecraft mc) {
+                        if (!Mc.is("[26.2,)")) {
+                            Options options = mc.options;
+                            return options.hideGui;
+                        }
+                        return false;
+                    }
+                    static Options unguarded;
+                }
+                """);
+        List<HighlightInfo> errors = errors();
+        // The import and the 26.1 branch are fine; the code that also runs in 26.2 is told where Options exists.
+        assertEquals(describe(errors), 1, errors.size());
+        assertError(errors, "Options", "'mc.Options' only exists in [26.1,26.2), but this code runs in [26.1,).");
+        assertTrue(describe(errors), errors.getFirst().getStartOffset() > myFixture.getFile().getText().indexOf("static Options unguarded"));
+    }
+
+    public void testExplainsApiOfOtherVersionsInActiveCode() {
+        myFixture.configureByText("Active.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.*;
+                class Active {
+                    static void run(Minecraft mc, Screen screen) {
+                        mc.setScr<caret>een(screen);
+                        if (Mc.is("[26.2,)")) {
+                            Object old = mc.screen;
+                        }
+                    }
+                }
+                """);
+        List<HighlightInfo> errors = errors();
+        assertError(errors, "setScreen", "'Minecraft.setScreen' only exists in [26.1,26.2), but this code runs in [26.1,).");
+        assertError(errors, "screen", "Cannot resolve symbol 'screen' ('Minecraft.screen' only exists in [26.1,26.2))");
+        assertEquals(describe(errors), 2, errors.size()); // in place of the IDE's own errors
+
+        myFixture.launchAction(myFixture.findSingleIntention("Surround with if (Mc.is(\"[26.1,26.2)\"))"));
+        assertTrue(myFixture.getFile().getText(), myFixture.getFile().getText().replaceAll("\\s+", " ")
+                .contains("if (Mc.is(\"[26.1,26.2)\")) { mc.setScreen(screen); }"));
+        assertEquals(describe(errors()), 1, errors().size()); // now 26.1 code, which has setScreen
+    }
+
+    public void testImportsAClassOfTheBranchVersion() {
+        myFixture.configureByText("Fix.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.Minecraft;
+                class Fix {
+                    static boolean hidden(Minecraft mc) {
+                        if (!Mc.is("[26.2,)")) {
+                            Opt<caret>ions options = mc.options;
+                            return options.hideGui;
+                        }
+                        return false;
+                    }
+                }
+                """);
+        assertError(errors(), "Options", "[26.1] Cannot resolve symbol 'Options'");
+        myFixture.launchAction(myFixture.findSingleIntention("Import 'mc.Options' (26.1)"));
+
+        assertTrue(myFixture.getFile().getText(), myFixture.getFile().getText().contains("import mc.Minecraft;\nimport mc.Options;\n"));
+        assertEmpty(describe(errors()), errors());
+    }
+
+    public void testCompletesClassesOfTheBranchVersion() {
+        myFixture.configureByText("Complete.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.Minecraft;
+                class Complete {
+                    static boolean hidden(Minecraft mc) {
+                        if (!Mc.is("[26.2,)")) {
+                            Optio<caret>
+                        }
+                        return false;
+                    }
+                }
+                """);
+        LookupElement[] elements = myFixture.completeBasic();
+        if (elements != null) {
+            LookupElement options = Arrays.stream(elements).filter(e -> e.getLookupString().equals("Options")).findFirst()
+                    .orElseThrow(() -> new AssertionError(myFixture.getLookupElementStrings()));
+            String tail = LookupElementPresentation.renderElement(options).getTailText();
+            assertTrue(tail, tail != null && tail.contains("26.1"));
+            myFixture.getLookup().setCurrentItem(options);
+            myFixture.finishLookup(Lookup.NORMAL_SELECT_CHAR);
+        }
+        String text = myFixture.getFile().getText();
+        assertTrue(text, text.contains("import mc.Options;"));
+        assertTrue(text, text.contains("            Options\n"));
+    }
+
+    public void testImportsAMovedClassFromEachVersion() {
+        myFixture.configureByText("Poses.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.newpkg.Pose;
+                import mc.oldpkg.Pose;
+                class Poses {
+                    static String name() {
+                        return Mc.is("[26.2,)") ? new Pose().name() : new Po<caret>se().name();
+                    }
+                }
+                """);
+        assertEmpty(describe(errors()), errors());
+        PsiElement[] targets = gotoTargets();
+        assertEquals(1, targets.length);
+        assertTrue(path(targets[0]), path(targets[0]).endsWith("/mc-26.1/mc/oldpkg/Pose.class"));
+    }
+
+    public void testExplainsAnImportThatHidesTheActiveVersionsClass() {
+        // mc.oldpkg.Pose (26.1) comes first, so the IDE does not see 26.2's mc.newpkg.Pose through the second import.
+        myFixture.configureByText("Poses.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.oldpkg.Pose;
+                import mc.newpkg.Pose;
+                class Poses {
+                    static String name() {
+                        return Mc.is("[26.2,)") ? new Po<caret>se().name() : new Pose().name();
+                    }
+                }
+                """);
+        // Explained on the active branch's Pose (with follow-on errors until it is fixed); the 26.1 branch is fine,
+        // its view drops the 26.2 import.
+        List<HighlightInfo> errors = errors();
+        assertError(errors, "Pose", "Cannot resolve symbol 'Pose': the IDE resolves it through the first import of that name, "
+                + "'mc.oldpkg.Pose', which this version does not have.");
+        assertEquals(describe(errors), 1, errors.stream().filter(info -> text(info).equals("Pose")).count());
+
+        myFixture.launchAction(myFixture.findSingleIntention("Import the packages of 'Pose' on demand"));
+        String text = myFixture.getFile().getText();
+        assertTrue(text, text.contains("import mc.oldpkg.*;\nimport mc.newpkg.*;\n"));
+        assertEmpty(describe(errors()), errors());
+    }
+
+    public void testReportsJavaErrorsOfInactiveCodeWithItsVersion() {
+        myFixture.configureByText("Errors.java", """
+                import cc.gahaha.fastmultiversion.IfMc;
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.*;
+                class Errors {
+                    static void run(Minecraft mc) {
+                        if (Mc.is("[26.2,)")) {
+                            Screen screen = mc.gui.screen();
+                        } else {
+                            String hidden = mc.options.hideGui;
+                            int count = "many";
+                            Screen screen = mc.screen;
+                        }
+                    }
+                    @IfMc("[26.1,26.2)")
+                    static Screen old(Minecraft mc) {
+                        if (mc.screen != null) {
+                            return mc.screen;
+                        }
+                    }
+                }
+                """);
+        List<HighlightInfo> errors = errors();
+        assertError(errors, "hideGui", "[26.1] Incompatible types. Found: 'boolean', required: 'java.lang.String'");
+        assertError(errors, "\"many\";", "[26.1] Incompatible types. Found: 'java.lang.String', required: 'int'");
+        assertTrue(describe(errors), errors.stream().anyMatch(info -> "[26.1] Missing return statement".equals(info.getDescription())));
+        assertEquals(describe(errors), 3, errors.size());
+    }
+
+    public void testDeclaresOncePerVersion() {
+        myFixture.configureByText("Twice.java", """
+                import cc.gahaha.fastmultiversion.IfMc;
+                import mc.*;
+                class Twice {
+                    @IfMc("[26.1,26.2)") static Screen screen(Minecraft mc) { return mc.screen; }
+                    @IfMc("[26.2,)") static Screen screen(Minecraft mc) { return mc.gui.screen(); }
+                    static Screen current(Minecraft mc) { return scr<caret>een(mc); }
+                }
+                """);
+        assertEmpty(describe(errors()), errors());
+
+        // The call goes to the active version's declaration, not to a choice of both.
+        PsiElement[] targets = gotoTargets();
+        assertEquals(1, targets.length);
+        assertTrue(targets[0].getText(), targets[0].getText().contains("mc.gui.screen()"));
+    }
+
+    public void testRunsInspectionsOnInactiveCodeInItsVersion() {
+        // Text blocks: offers its fix on every string, without highlighting it; that stays so.
+        myFixture.enableInspections(new UnnecessarySemicolonInspection(), new TextBlockMigrationInspection());
+        myFixture.configureByText("Semicolons.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.*;
+                class Semicolons {
+                    static void setScreen(Minecraft mc, Screen screen) {
+                        if (Mc.is("[26.2,)")) {
+                            mc.gui.setScreen(screen);;
+                        } else {
+                            mc.setScreen(screen);<caret>;
+                            System.out.println("26.1");
+                        }
+                    }
+                }
+                """);
+        List<HighlightInfo> warnings = myFixture.doHighlighting(HighlightSeverity.WARNING).stream()
+                .filter(info -> info.getSeverity() == HighlightSeverity.WARNING).toList();
+        assertEquals(describe(warnings), 2, warnings.size());
+        int inactive = myFixture.getFile().getText().indexOf("mc.setScreen(screen);;") + "mc.setScreen(screen);".length();
+        assertTrue(describe(warnings), warnings.stream().anyMatch(info -> info.getStartOffset() == inactive
+                && info.getDescription().startsWith("[26.1] Unnecessary semicolon")));
+        assertTrue(describe(warnings), warnings.stream().anyMatch(info -> info.getStartOffset() != inactive
+                && info.getDescription().startsWith("Unnecessary semicolon")));
+
+        // Its fix works on the file.
+        myFixture.launchAction(myFixture.getAvailableIntentions().stream()
+                .filter(action -> action.getText().startsWith("Remove unnecessary semicolon")).findFirst()
+                .orElseThrow(() -> new AssertionError(myFixture.getAvailableIntentions().stream().map(a -> a.getText()).toList())));
+        assertTrue(myFixture.getFile().getText(), myFixture.getFile().getText().contains("mc.setScreen(screen);\n"));
+    }
+
+    public void testReportsUsesOfDeclarationsForOtherVersions() {
+        myFixture.configureByText("Calls.java", """
+                import cc.gahaha.fastmultiversion.IfMc;
+                import cc.gahaha.fastmultiversion.Mc;
+                class Calls {
+                    static int run() {
+                        if (Mc.is("[26.2,)")) {
+                            return old(1);
+                        }
+                        return old(2); // fine: only 26.1 gets past the return
+                    }
+                    static int unguarded() { return old(3); }
+                    @IfMc("[26.1,26.2)") static int old(int a) { return a; }
+                }
+                """);
+        List<HighlightInfo> errors = errors();
+        assertEquals(describe(errors), 2, errors.size());
+        assertTrue(describe(errors), errors.stream().anyMatch(info -> info.getDescription().equals(
+                "'Calls.old(int)' only exists in [26.1,26.2), not in [26.2,), where this code runs.")));
+        assertTrue(describe(errors), errors.stream().anyMatch(info -> info.getDescription().startsWith(
+                "'Calls.old(int)' only exists in [26.1,26.2), but this code runs in [26.1,). Use it inside if (Mc.is(\"[26.1,26.2)\"))")));
+    }
+
+    public void testNavigatesToTheDeclarationOfTheBranchVersion() {
+        myFixture.configureByText("Compat.java", COMPAT.replace("mc.setScreen(screen)", "mc.setScr<caret>een(screen)"));
+        PsiElement[] targets = gotoTargets();
+        assertEquals(1, targets.length);
+        assertTrue(targets[0] instanceof PsiMethod);
+        assertTrue(path(targets[0]), path(targets[0]).contains("/mc-26.1/"));
+
+        myFixture.configureByText("Compat.java", COMPAT.replace("mc.options.hideGui", "mc.options.hide<caret>Gui"));
+        targets = gotoTargets();
+        assertEquals(1, targets.length);
+        assertTrue(path(targets[0]), path(targets[0]).contains("/mc-26.1/"));
+
+        // A declaration in the file itself is the one in the editor.
+        myFixture.configureByText("Compat.java", COMPAT.replace("mc.setScreen(screen)", "mc.setScreen(scr<caret>een)"));
+        targets = gotoTargets();
+        assertEquals(1, targets.length);
+        assertTrue(targets[0] instanceof PsiParameter);
+        assertSame(myFixture.getFile(), targets[0].getContainingFile());
+
+        // Code that runs in the active version is left to the IDE.
+        myFixture.configureByText("Compat.java", COMPAT.replace("mc.gui.setScreen(screen)", "mc.gui.setScr<caret>een(screen)"));
+        int offset = myFixture.getCaretOffset();
+        assertNull(new InactiveGotoDeclarationHandler().getGotoDeclarationTargets(
+                myFixture.getFile().findElementAt(offset), offset, myFixture.getEditor()));
+    }
+
+    public void testDocumentsTheDeclarationOfTheBranchVersion() {
+        myFixture.configureByText("Compat.java", COMPAT.replace("mc.setScreen(screen)", "mc.setScr<caret>een(screen)"));
+        List<? extends DocumentationTarget> targets = IdeDocumentationTargetProvider.getInstance(myFixture.getProject())
+                .documentationTargets(myFixture.getEditor(), myFixture.getFile(), myFixture.getCaretOffset());
+        assertFalse(targets.isEmpty());
+        PsiElement documented = ((JavaDocumentationTarget) targets.getFirst()).getElement();
+        assertTrue(documented instanceof PsiMethod);
+        assertTrue(path(documented), path(documented).contains("/mc-26.1/"));
+    }
+
+    public void testCompletesTheMembersOfTheBranchVersion() {
+        myFixture.configureByText("Compat.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.*;
+                class Compat {
+                    static void run(Minecraft mc) {
+                        if (Mc.is("[26.2,)")) {
+                            mc.gui.screen();
+                        } else {
+                            mc.<caret>
+                        }
+                    }
+                }
+                """);
+        LookupElement[] elements = myFixture.completeBasic();
+        List<String> names = myFixture.getLookupElementStrings();
+        assertNotNull(names);
+        assertTrue(names.toString(), names.containsAll(List.of("screen", "setScreen", "options")));
+        assertFalse(names.toString(), names.contains("gui"));
+        LookupElement setScreen = Arrays.stream(elements).filter(e -> e.getLookupString().equals("setScreen")).findFirst().orElseThrow();
+        String tail = LookupElementPresentation.renderElement(setScreen).getTailText();
+        assertTrue(tail, tail != null && tail.contains("26.1"));
+
+        // Choosing one inserts it as usual.
+        myFixture.configureByText("Compat.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.*;
+                class Compat {
+                    static void run(Minecraft mc, Screen screen) {
+                        if (!Mc.is("[26.2,)")) {
+                            mc.setSc<caret>
+                        }
+                    }
+                }
+                """);
+        assertNull(myFixture.completeBasic());
+        assertTrue(myFixture.getFile().getText(), myFixture.getFile().getText().contains("mc.setScreen()"));
+        assertEquals(myFixture.getFile().getText().indexOf("mc.setScreen(") + "mc.setScreen(".length(), myFixture.getCaretOffset());
+    }
+
+    public void testLeavesCompletionInActiveCodeToTheIde() {
+        myFixture.configureByText("Compat.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.*;
+                class Compat {
+                    static void run(Minecraft mc) {
+                        if (Mc.is("[26.2,)")) {
+                            mc.<caret>
+                        }
+                    }
+                }
+                """);
+        myFixture.completeBasic();
+        List<String> names = myFixture.getLookupElementStrings();
+        assertNotNull(names);
+        assertTrue(names.toString(), names.contains("gui"));
+        assertFalse(names.toString(), names.contains("setScreen"));
+    }
+
+    // ---- helpers
+
+    /** What Go to Declaration would use: the first handler with targets. */
+    private PsiElement[] gotoTargets() {
+        int offset = myFixture.getCaretOffset();
+        PsiElement leaf = myFixture.getFile().findElementAt(offset);
+        for (GotoDeclarationHandler handler : GotoDeclarationHandler.EP_NAME.getExtensionList()) {
+            PsiElement[] targets = handler.getGotoDeclarationTargets(leaf, offset, myFixture.getEditor());
+            if (targets != null && targets.length > 0) {
+                return targets;
+            }
+        }
+        return PsiElement.EMPTY_ARRAY;
+    }
+
+    private static String path(PsiElement element) {
+        return element.getContainingFile().getVirtualFile().getPath();
+    }
+
+    private List<HighlightInfo> errors() {
+        return myFixture.doHighlighting(HighlightSeverity.ERROR);
+    }
+
+    private String text(HighlightInfo info) {
+        return myFixture.getEditor().getDocument().getText(TextRange.create(info.getStartOffset(), info.getEndOffset()));
+    }
+
+    private String describe(List<HighlightInfo> infos) {
+        return infos.stream().map(i -> "'" + text(i) + "': " + i.getDescription()).toList().toString();
+    }
+
+    private void assertError(List<HighlightInfo> errors, String highlighted, String descriptionStart) {
+        assertTrue(describe(errors), errors.stream().anyMatch(info -> text(info).equals(highlighted)
+                && info.getDescription() != null && info.getDescription().startsWith(descriptionStart)));
+    }
+
+    /**
+     * Two tiny Minecraft versions, compiled once, and their API database. In 26.1 the screen is
+     * {@code mc.screen} / {@code mc.setScreen}, in 26.2 it moved to {@code mc.gui}; {@code mc.Options} only
+     * exists in 26.1; {@code Pose} moved from {@code mc.oldpkg} to {@code mc.newpkg}.
+     */
+    private static synchronized Path libraries() throws IOException {
+        if (libraries == null) {
+            Path root = Files.createTempDirectory("multiversion-mc");
+            Path old = compile(root, "mc-26.1", Map.of(
+                    "mc/Screen.java", "package mc; public class Screen {}",
+                    "mc/Options.java", "package mc; public class Options { public boolean hideGui; }",
+                    "mc/Minecraft.java", "package mc; public class Minecraft { public Screen screen; public Options options; "
+                            + "public void setScreen(Screen screen) {} }",
+                    "mc/oldpkg/Pose.java", "package mc.oldpkg; public class Pose { public String name() { return \"old\"; } }"));
+            Path current = compile(root, "mc-26.2", Map.of(
+                    "mc/Screen.java", "package mc; public class Screen {}",
+                    "mc/Gui.java", "package mc; public class Gui { public Screen screen() { return null; } "
+                            + "public void setScreen(Screen screen) {} }",
+                    "mc/Minecraft.java", "package mc; public class Minecraft { public final Gui gui = new Gui(); }",
+                    "mc/newpkg/Pose.java", "package mc.newpkg; public class Pose { public String name() { return \"new\"; } }"));
+            database = ApiDbGenerator.generate(List.of(
+                    new VersionJars(McVersion.parse("26.1"), List.of(old)),
+                    new VersionJars(McVersion.parse("26.2"), List.of(current))));
+            libraries = root;
+        }
+        return libraries;
+    }
+
+    /** Compiles into {@code root/name} (the IDE's library root) and returns a jar of it (for the database). */
+    private static Path compile(Path root, String name, Map<String, String> sources) throws IOException {
+        JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
+        assertNotNull("the tests need a JDK with javac", javac);
+        Path classes = root.resolve(name);
+        List<String> args = new ArrayList<>(List.of("-d", classes.toString()));
+        for (Map.Entry<String, String> source : sources.entrySet()) {
+            Path file = root.resolve(name + "-src").resolve(source.getKey());
+            Files.createDirectories(file.getParent());
+            Files.writeString(file, source.getValue());
+            args.add(file.toString());
+        }
+        assertEquals(0, javac.run(null, null, null, args.toArray(String[]::new)));
+        Path jar = root.resolve(name + ".jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar));
+             Stream<Path> files = Files.walk(classes)) {
+            for (Path file : files.filter(Files::isRegularFile).toList()) {
+                out.putNextEntry(new JarEntry(classes.relativize(file).toString().replace('\\', '/')));
+                out.write(Files.readAllBytes(file));
+                out.closeEntry();
+            }
+        }
+        return jar;
+    }
+}

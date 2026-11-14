@@ -1,0 +1,11 @@
+// Minecraft version numbers and version ranges, shared by the javac plugin and the API database.
+
+apply plugin: 'maven-publish'
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
+    }
+}

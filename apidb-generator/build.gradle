@@ -1,0 +1,28 @@
+// Builds the API availability database from each Minecraft version's jars.
+
+def asmVersion = '9.11.1'
+
+dependencies {
+    implementation project(':apidb')
+    implementation "org.ow2.asm:asm:${asmVersion}"
+    implementation "org.ow2.asm:asm-tree:${asmVersion}"
+}
+
+// ./gradlew :apidb-generator:runApiDb -PapiDbArgs="--output api.mcapi --diff diff.txt --version 26.1=a.jar --version 26.2=b.jar"
+tasks.register('runApiDb', JavaExec) {
+    group = 'multiversion'
+    description = 'Runs the API database generator; pass its arguments with -PapiDbArgs="..."'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'cc.gahaha.fastmultiversion.apidb.generator.ApiDbMain'
+    args((project.findProperty('apiDbArgs') ?: '--help').toString().trim().split(/\s+/))
+}
+
+apply plugin: 'maven-publish'
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from components.java
+        }
+    }
+}

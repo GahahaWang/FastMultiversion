@@ -1,0 +1,65 @@
+// The Gradle plugin that sets up a multi-version mod: one subproject per Minecraft version, all compiling the
+// shared sources with the javac plugin, plus the API database for the range check.
+apply plugin: 'java-gradle-plugin'
+apply plugin: 'maven-publish'
+
+configurations {
+    // Jars the plugin hands to the mod's builds; packed into the plugin jar so that no repository is needed.
+    embeddedProcessor {
+        canBeConsumed = false
+        attributes { attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME)) }
+    }
+    embeddedApi {
+        canBeConsumed = false
+        attributes { attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, Usage.JAVA_RUNTIME)) }
+    }
+}
+
+dependencies {
+    implementation project(':apidb-generator')
+    implementation project(':apidb')
+    implementation project(':versioning')
+
+    embeddedProcessor project(':javac-plugin')
+    embeddedApi project(':annotations')
+
+    testImplementation testFixtures(project(':javac-plugin'))
+}
+
+gradlePlugin {
+    plugins {
+        multiversion {
+            id = 'cc.gahaha.fastmultiversion'
+            implementationClass = 'cc.gahaha.fastmultiversion.gradle.MultiversionSettingsPlugin'
+        }
+    }
+}
+
+def embeddedRoot = layout.buildDirectory.dir('generated/embedded')
+def embedLibraries = tasks.register('embedLibraries') {
+    def processorJars = configurations.embeddedProcessor
+    def apiJars = configurations.embeddedApi
+    def out = embeddedRoot.map { it.dir('cc/gahaha/fastmultiversion/gradle/lib') }
+    inputs.files(processorJars).withPropertyName('processorJars')
+    inputs.files(apiJars).withPropertyName('apiJars')
+    outputs.dir(out)
+    doLast {
+        def dir = out.get().asFile
+        dir.deleteDir()
+        dir.mkdirs()
+        def lines = []
+        processorJars.each { f -> new File(dir, f.name).bytes = f.bytes; lines << "processor=${f.name}" }
+        apiJars.each { f -> new File(dir, f.name).bytes = f.bytes; lines << "api=${f.name}" }
+        new File(dir, 'index.txt').text = lines.join('\n') + '\n'
+    }
+}
+
+tasks.named('processResources', ProcessResources) {
+    dependsOn embedLibraries
+    from(embeddedRoot)
+}
+
+tasks.named('test', Test) {
+    // TestCompiler (used to build stand-in Minecraft jars) runs javac in-process.
+    jvmArgs rootProject.javacExports
+}
