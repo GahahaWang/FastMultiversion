@@ -7,8 +7,9 @@ subprojects {
     apply plugin: 'java-library'
 
     group = 'cc.gahaha'
-    // A release sets its version with -PreleaseVersion=... (see .github/workflows/release.yml).
-    version = findProperty('releaseVersion') ?: '0.1.0-SNAPSHOT'
+    // The version in gradle.properties, which semantic-release sets for each release (.releaserc). Only the
+    // release build passes -Prelease; any other build is a snapshot of it.
+    version = rootProject.version.toString() + (rootProject.hasProperty('release') ? '' : '-SNAPSHOT')
 
     repositories {
         mavenCentral()

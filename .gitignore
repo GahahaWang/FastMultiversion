@@ -40,3 +40,5 @@ bin/
 .DS_Store
 
 .intellijPlatform
+### Node (semantic-release) ###
+node_modules/
