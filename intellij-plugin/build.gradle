@@ -13,8 +13,11 @@ repositories {
     }
 }
 
-// Builds against an installed IntelliJ IDEA: -PideaPath=... or the default installation below.
+// Builds against an installed IntelliJ IDEA (-PideaPath=... or the default installation below) if there is
+// one, otherwise (e.g. on CI) against the IntelliJ IDEA release ideaRelease (-PideaRelease=...), downloaded
+// from JetBrains' repository.
 def ideaPath = (findProperty('ideaPath') ?: 'C:/Program Files/JetBrains/IntelliJ IDEA 2026.1.4').toString()
+def ideaRelease = (findProperty('ideaRelease') ?: '2026.3').toString()
 
 configurations {
     // Libraries whose classes go into the plugin jar itself, so that the jar alone is a complete plugin:
@@ -35,7 +38,11 @@ dependencies {
     testImplementation project(':apidb-generator')
 
     intellijPlatform {
-        local(ideaPath)
+        if (file(ideaPath).isDirectory()) {
+            local(ideaPath)
+        } else {
+            intellijIdea(ideaRelease) {}
+        }
         bundledPlugin('com.intellij.java')
         testFramework(TestFrameworkType.Platform.INSTANCE)
         testFramework(TestFrameworkType.Plugin.Java.INSTANCE)
