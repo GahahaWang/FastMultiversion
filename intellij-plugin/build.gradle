@@ -1,9 +1,11 @@
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
-// The IntelliJ plugin: the range check as you type, quick fixes, and code of inactive versions resolved
-// against the version it runs in.
+// The IntelliJ plugin: the range check as you type, quick fixes, code of inactive versions resolved
+// against the version it runs in, and a New Project wizard for FastMultiversion mods (in Kotlin, for
+// IntelliJ's UI DSL).
 plugins {
     id 'org.jetbrains.intellij.platform' version '2.20.1'
+    id 'org.jetbrains.kotlin.jvm' version '2.4.21'
 }
 
 repositories {
@@ -16,7 +18,7 @@ repositories {
 // Builds against an installed IntelliJ IDEA (-PideaPath=... or the default installation below) if there is
 // one, otherwise (e.g. on CI) against the IntelliJ IDEA release ideaRelease, downloaded from JetBrains'
 // repository: -PideaRelease=..., or the one in gradle/libs.versions.toml, which Dependabot keeps up to date.
-def ideaPath = (findProperty('ideaPath') ?: 'C:/Program Files/JetBrains/IntelliJ IDEA 2026.1.4').toString()
+def ideaPath = (findProperty('ideaPath') ?: 'C:/Program Files/JetBrains/IntelliJ IDEA 2026.3').toString()
 def ideaRelease = (findProperty('ideaRelease') ?: libs.versions.intellij.idea.get()).toString()
 
 configurations {
@@ -44,6 +46,7 @@ dependencies {
             intellijIdea(ideaRelease) {}
         }
         bundledPlugin('com.intellij.java')
+        bundledPlugin('com.intellij.gradle')
         testFramework(TestFrameworkType.Platform.INSTANCE)
         testFramework(TestFrameworkType.Plugin.Java.INSTANCE)
     }
@@ -61,6 +64,22 @@ intellijPlatform {
         version = project.version
         ideaVersion {
             sinceBuild = '263'
+        }
+    }
+}
+
+tasks.named('test', Test) {
+    // The wizard test writes a sample project that uses this build of the Gradle plugin.
+    systemProperty 'fastmultiversion.version', project.version.toString()
+    systemProperty 'fastmultiversion.sample', layout.buildDirectory.dir('wizard-sample').get().asFile.path
+}
+
+tasks.named('processResources', ProcessResources) {
+    // New projects from the wizard get this build's own Gradle wrapper.
+    into('fastmultiversion/wrapper') {
+        from(rootProject.files('gradlew', 'gradlew.bat'))
+        from(rootProject.file('gradle/wrapper')) {
+            into 'gradle/wrapper'
         }
     }
 }

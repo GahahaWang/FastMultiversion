@@ -1,0 +1,50 @@
+// The build script of every :<version>:fabric project; multiversion.version is that project's Minecraft version.
+apply plugin: 'net.fabricmc.fabric-loom'
+
+def mc = multiversion.version
+def dep = { String key -> project.property("mc.${mc}.${key}") }
+
+group = maven_group
+version = "${mod_version}-${mc}"
+base {
+    archivesName = "${archives_name}-fabric"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = java_version as int
+}
+
+loom {
+    runs {
+        client {
+            client()
+            setConfigName("Fabric Client ${mc}")
+            ideConfigGenerated(multiversion.active)
+            runDir('runs/client')
+        }
+        server {
+            server()
+            setConfigName("Fabric Server ${mc}")
+            ideConfigGenerated(multiversion.active)
+            runDir('runs/server')
+        }
+    }
+}
+
+dependencies {
+    minecraft "net.minecraft:minecraft:${mc}"
+    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${dep('fabric_api')}"
+}
+
+processResources {
+    def properties = [version: project.version, minecraft_version_range: dep('range_fabric')]
+    inputs.properties(properties)
+    filesMatching('fabric.mod.json') {
+        expand(properties)
+    }
+}

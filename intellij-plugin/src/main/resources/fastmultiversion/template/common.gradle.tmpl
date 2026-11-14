@@ -1,0 +1,23 @@
+// The build script of every :<version>:common project: the shared code in src/main, compiled against Minecraft
+// without a loader. In the IDE it owns src/main, so each loader's code sees the shared code but not the others'.
+apply plugin: 'net.fabricmc.fabric-loom'
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(java_version)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = java_version as int
+}
+
+loom {
+    runs {
+        configureEach {
+            ideConfigGenerated(false)
+        }
+    }
+}
+
+dependencies {
+    minecraft "net.minecraft:minecraft:${multiversion.version}"
+}

@@ -65,6 +65,21 @@ The plugin is then `intellij-plugin/build/distributions/intellij-plugin-0.1.0-SN
 
 ## Setting up a mod
 
+### With the IntelliJ IDEA wizard
+
+With the IntelliJ plugin installed, choose **File → New → Project… → FastMultiversion** and enter:
+
+- the mod ID, the mod name and the Java package;
+- the Minecraft versions, e.g. `26.1.2, 26.2, 26.3`;
+- the loaders: Fabric, NeoForge or both.
+
+The wizard creates the project described below, with a Gradle wrapper and a small mod for each loader, and
+imports it. It looks up the newest Fabric Loader, and Fabric API and NeoForge for each Minecraft version; what
+it cannot find online is marked `UNKNOWN` in `gradle.properties`. It puts the Gradle plugin of the same release
+in `libs/fastmultiversion-repo`, or uses `mavenLocal()` for a plugin built from source.
+
+To set up a project by hand instead, follow the rest of this section.
+
 ### settings.gradle
 
 ```groovy

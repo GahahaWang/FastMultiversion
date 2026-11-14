@@ -1,0 +1,20 @@
+pluginManagement {
+    repositories {
+{{pluginRepositories}}
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+plugins {
+    id 'cc.gahaha.fastmultiversion' version '{{fastmultiversionVersion}}'
+}
+
+rootProject.name = '{{projectName}}'
+
+// One project per Minecraft version and loader, e.g. :{{exampleVersion}}:{{exampleLoader}} in versions/{{exampleVersion}}/{{exampleLoader}},
+// running gradle/{{exampleLoader}}/{{exampleLoader}}.gradle. Shared code is in src/main, loader code in src/<loader>.
+multiversion {
+    versions {{versions}}
+    loaders {{loaders}}
+}
