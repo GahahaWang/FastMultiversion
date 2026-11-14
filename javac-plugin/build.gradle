@@ -10,7 +10,7 @@ dependencies {
     testImplementation project(':apidb-generator')
 
     // TestCompiler: compiles sources in-process with the plugin.
-    testFixturesImplementation platform('org.junit:junit-bom:6.0.0')
+    testFixturesImplementation platform('org.junit:junit-bom:6.1.3')
     testFixturesImplementation 'org.junit.jupiter:junit-jupiter-api'
 }
 
