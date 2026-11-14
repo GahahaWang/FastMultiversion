@@ -1,3 +1,9 @@
+## [0.6.1](https://github.com/GahahaWang/FastMultiversion/compare/v0.6.0...v0.6.1) (2026-11-14)
+
+### 🐛 Bug Fixes
+
+* Color names of other versions with the editor's color scheme ([4f72aea](https://github.com/GahahaWang/FastMultiversion/commit/4f72aeafe43eb5a1a0f8abb7aa9fa1f87897a009))
+
 ## [0.6.0](https://github.com/GahahaWang/FastMultiversion/compare/v0.5.0...v0.6.0) (2026-11-14)
 
 ### ✨ New Features
