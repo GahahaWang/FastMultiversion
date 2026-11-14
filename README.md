@@ -22,8 +22,7 @@ if (Mc.is("[26.2,)")) {
 
 ### From a release
 
-[Releases](https://github.com/GahahaWang/FastMultiversion/releases) are stable versions; pre-releases such as
-`0.2.0-dev.1` have the latest changes. Each has two files:
+Each [release](https://github.com/GahahaWang/FastMultiversion/releases) has two files:
 
 - `fastmultiversion-<version>-maven-repository.zip`: the Gradle plugin. Unzip it into your mod, e.g. to
   `libs/fastmultiversion-repo`, and add it to the plugin repositories in `settings.gradle`:
@@ -44,6 +43,10 @@ if (Mc.is("[26.2,)")) {
 
 - `fastmultiversion-intellij-plugin-<version>.zip`: the IntelliJ plugin. Install it with
   **Settings → Plugins → ⚙ → Install Plugin from Disk…** and restart the IDE.
+
+  From then on, IntelliJ IDEA offers its updates: the plugin adds its own plugin repository. To add it by hand,
+  use **Settings → Plugins → ⚙ → Manage Plugin Repositories…** with
+  `https://gahahawang.github.io/FastMultiversion/updatePlugins.xml`.
 
 ### From source
 

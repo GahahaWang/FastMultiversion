@@ -1,26 +1,27 @@
-# CI, in three jobs that run one after the other:
+# CI:
 #
 # build             Builds and tests every module, on each push and each pull request to dev. The IntelliJ
 #                   plugin is built against IntelliJ IDEA downloaded from JetBrains and uploaded as an
 #                   artifact. Tests that need Minecraft jars from a local Loom cache are skipped.
 #
-# release           After a push builds: semantic-release (.releaserc). From the Conventional Commits since the
-#                   last release (feat: → minor, fix:/perf: → patch, breaking change → major) it picks the next
-#                   version, packs it (.github/scripts/package-release.sh), commits the version and
+# release           After a push to dev builds: semantic-release (.releaserc). From the Conventional Commits since
+#                   the last release (feat: → minor, fix:/perf: → patch, breaking change → major) it picks the
+#                   next version (x.y.z), packs it (.github/scripts/package-release.sh), commits the version and
 #                   CHANGELOG.md, tags it and creates a GitHub release with the Gradle plugin (as a Maven
-#                   repository zip) and the IntelliJ plugin. dev publishes pre-releases such as 0.2.0-dev.1;
-#                   after a release on master, master is merged back into dev. Other commits release nothing.
+#                   repository zip) and the IntelliJ plugin. Other commits release nothing.
 #
-# open-pull-request After a push to dev: opens a pull request from dev to master, unless one is open already or
-#                   master has everything dev has. That needs the repository setting "Allow GitHub Actions to
-#                   create and approve pull requests" (Settings → Actions → General → Workflow permissions).
+# merge-to-master   After that, if a commit message of the push asks for it ("merge to master" or "合併到 master",
+#                   in any case): merges dev, with the release, into master. master releases nothing itself.
+#
+# pages             After a release (or a manual run): writes the IntelliJ plugin repository,
+#                   updatePlugins.xml, from the releases (.github/scripts/plugin-repository.py) to the gh-pages
+#                   branch, which GitHub Pages serves. Needs the repository setting Settings → Pages → Source:
+#                   Deploy from a branch, gh-pages, / (root).
 name: CI
 
 on:
   push:
     branches: [dev, master]
-  # Pull requests to dev only: those to master are the one this workflow opens from dev, whose commits were
-  # built when pushed to dev (GitHub does not run workflows for it, as the workflow's own token opened it).
   pull_request:
     branches: [dev]
   workflow_dispatch:
@@ -60,14 +61,18 @@ jobs:
 
   release:
     needs: build
-    if: github.event_name != 'pull_request'
+    if: github.ref == 'refs/heads/dev' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       issues: write
       pull-requests: write
     concurrency:
-      group: release-${{ github.ref }}
+      group: release
+    outputs:
+      published: ${{ steps.semantic-release.outputs.new_release_published }}
+      version: ${{ steps.semantic-release.outputs.new_release_version }}
+      tag: ${{ steps.semantic-release.outputs.new_release_git_tag }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -89,33 +94,73 @@ jobs:
         run: npm ci
 
       - name: Release
+        id: semantic-release
         uses: cycjimmy/semantic-release-action@v8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  open-pull-request:
+  merge-to-master:
     needs: release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: write
+      contents: write
     steps:
-      - name: Open a pull request from dev to master
+      - name: Look for a request to merge
+        id: request
+        run: |
+          if jq -r '.commits[].message' "$GITHUB_EVENT_PATH" | grep -qiE 'merge[[:space:]]+(in)?to[[:space:]]+master|合併到[[:space:]]*master'; then
+            echo "merge=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No commit of this push asks to merge to master."
+          fi
+
+      - uses: actions/checkout@v7
+        if: steps.request.outputs.merge == 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Merge dev into master
+        if: steps.request.outputs.merge == 'true'
+        env:
+          # The release's commit (version and CHANGELOG.md), or the commit that was built if nothing was released.
+          COMMIT: ${{ needs.release.outputs.tag || github.sha }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -q -B master origin/master
+          git merge --no-edit -m "Merge dev into master" "$COMMIT"
+          git push -q origin master
+          # A merge commit goes back to dev, if dev did not move on, so that the branches stay the same.
+          git push -q origin master:dev || echo "dev moved on; master's merge commit stays on master."
+
+  pages:
+    needs: release
+    if: needs.release.outputs.published == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: pages
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Write the IntelliJ plugin repository
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+        run: gh api "repos/$GH_REPO/releases?per_page=100" | python3 .github/scripts/plugin-repository.py intellij-plugin/build.gradle site
+
+      - name: Publish it on the gh-pages branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.release.outputs.version }}
         run: |
-          open=$(gh pr list --head dev --base master --state open --json number --jq 'length')
-          if [ "$open" != "0" ]; then
-            echo "A pull request from dev to master is open already."
-            exit 0
-          fi
-          ahead=$(gh api "repos/$GH_REPO/compare/master...dev" --jq '.ahead_by')
-          if [ "$ahead" = "0" ]; then
-            echo "master has everything dev has."
-            exit 0
-          fi
-          commits=$(gh api "repos/$GH_REPO/compare/master...dev" --jq '.commits[] | "- " + (.commit.message | split("\n")[0])')
-          gh pr create --head dev --base master --title "Merge dev into master" \
-            --body "$(printf 'Commits on dev that master does not have yet:\n\n%s\n' "$commits")"
+          cd site
+          git init -q -b gh-pages
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -q -m "Plugin repository${VERSION:+ for $VERSION}"
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git" gh-pages

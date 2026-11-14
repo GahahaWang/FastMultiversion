@@ -24,6 +24,8 @@
         <!-- File → New → Project → FastMultiversion. -->
         <newProjectWizard.generator implementation="cc.gahaha.fastmultiversion.intellij.wizard.FastMultiversionWizard"/>
         <notificationGroup id="FastMultiversion" displayType="BALLOON"/>
+        <!-- Updates: the plugin's own repository on GitHub Pages. -->
+        <postStartupActivity implementation="cc.gahaha.fastmultiversion.intellij.update.PluginRepositoryRegistrar"/>
 
         <localInspection language="JAVA"
                          shortName="McApiRange"
