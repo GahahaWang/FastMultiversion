@@ -13,10 +13,11 @@
 # merge-to-master   After that, if a commit message of the push asks for it ("merge to master" or "合併到 master",
 #                   in any case): merges dev, with the release, into master. master releases nothing itself.
 #
-# pages             After a release (or a manual run): writes the IntelliJ plugin repository,
-#                   updatePlugins.xml, from the releases (.github/scripts/plugin-repository.py) to the gh-pages
-#                   branch, which GitHub Pages serves. Needs the repository setting Settings → Pages → Source:
-#                   Deploy from a branch, gh-pages, / (root).
+# pages             After a release (or a manual run): writes the site from all releases
+#                   (.github/scripts/pages.py) to the gh-pages branch, which GitHub Pages serves: the Maven
+#                   repository with the Gradle plugin (maven/) and the IntelliJ plugin repository
+#                   (updatePlugins.xml). Needs the repository setting Settings → Pages → Source: Deploy from a
+#                   branch, gh-pages, / (root).
 name: CI
 
 on:
@@ -145,11 +146,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Write the IntelliJ plugin repository
+      - name: Write the Maven repository and the IntelliJ plugin repository
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh api "repos/$GH_REPO/releases?per_page=100" | python3 .github/scripts/plugin-repository.py intellij-plugin/build.gradle site
+        run: gh api "repos/$GH_REPO/releases?per_page=100" | python3 .github/scripts/pages.py intellij-plugin/build.gradle site
 
       - name: Publish it on the gh-pages branch
         env:

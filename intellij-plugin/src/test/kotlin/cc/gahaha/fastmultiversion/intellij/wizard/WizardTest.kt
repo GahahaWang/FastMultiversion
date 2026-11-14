@@ -62,15 +62,8 @@ class WizardTest {
 
     @Test
     fun usesTheReleaseOfThisPluginOrMavenLocal() {
-        val dir = Files.createTempDirectory("fmv-repo")
-        assertEquals(PluginRepository.MavenLocal("1.0.0-SNAPSHOT"), PluginRepositories.prepare(dir, "1.0.0-SNAPSHOT") { error("no download") })
-        assertEquals(PluginRepository.MavenLocal("1.0.0"), PluginRepositories.prepare(dir, "1.0.0") { null })
-
-        var requested: String? = null
-        val repository = PluginRepositories.prepare(dir, "1.0.0") { url -> requested = url; zip(mapOf("cc/gahaha/x.pom" to "<project/>")) }
-        assertEquals(PluginRepository.InProject("1.0.0"), repository)
-        assertEquals("https://github.com/GahahaWang/FastMultiversion/releases/download/v1.0.0/fastmultiversion-1.0.0-maven-repository.zip", requested)
-        assertEquals("<project/>", dir.resolve("libs/fastmultiversion-repo/cc/gahaha/x.pom").readText())
+        assertEquals(PluginRepository.Published("1.0.0"), PluginRepository.of("1.0.0"))
+        assertEquals(PluginRepository.MavenLocal("1.0.0-SNAPSHOT"), PluginRepository.of("1.0.0-SNAPSHOT"))
     }
 
     @Test
@@ -104,14 +97,15 @@ class WizardTest {
     fun generatesAProjectForOneLoader() {
         val fabric = both.copy(projectName = "FabricOnly", versions = listOf("26.2"), loaders = listOf("fabric"))
         val dir = sampleDir("FabricOnly")
-        ProjectGenerator.generate(dir, fabric, VersionLookup { null }.resolve(fabric), PluginRepository.InProject("1.0.0"))
+        ProjectGenerator.generate(dir, fabric, VersionLookup { null }.resolve(fabric), PluginRepository.Published("1.0.0"))
 
         assertFalse(dir.resolve("gradle/common/common.gradle").exists()) // one loader owns src/main itself
         assertFalse(dir.resolve("gradle/neoforge").exists())
         val build = dir.resolve("build.gradle").readText()
         assertTrue(build, build.contains("net.fabricmc.fabric-loom") && !build.contains("moddev"))
         val settings = dir.resolve("settings.gradle").readText()
-        assertTrue(settings, settings.contains("maven { url = file('libs/fastmultiversion-repo') }"))
+        assertTrue(settings, settings.contains("maven { url = \"https://gahahawang.github.io/FastMultiversion/maven\" }"))
+        assertTrue(settings, settings.contains("id 'cc.gahaha.fastmultiversion' version '1.0.0'"))
         assertTrue(settings, settings.contains("loaders 'fabric'"))
         val mod = dir.resolve("src/main/java/com/example/testmod/TestMod.java").readText()
         assertTrue(mod, mod.contains("LOGGER.info(\"Test Mod for Minecraft 26.2\");") && !mod.contains("Mc.is("))
@@ -141,16 +135,4 @@ class WizardTest {
 
     private fun metadata(vararg versions: String) =
         "<metadata><versioning><versions>" + versions.joinToString("") { "<version>$it</version>" } + "</versions></versioning></metadata>"
-
-    private fun zip(entries: Map<String, String>): ByteArray {
-        val out = java.io.ByteArrayOutputStream()
-        java.util.zip.ZipOutputStream(out).use { zip ->
-            for ((name, text) in entries) {
-                zip.putNextEntry(java.util.zip.ZipEntry(name))
-                zip.write(text.toByteArray())
-                zip.closeEntry()
-            }
-        }
-        return out.toByteArray()
-    }
 }

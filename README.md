@@ -20,38 +20,44 @@ if (Mc.is("[26.2,)")) {
 
 ## Installation
 
-### From a release
+### Gradle plugin
 
-Each [release](https://github.com/GahahaWang/FastMultiversion/releases) has two files:
+Add the FastMultiversion Maven repository to the plugin repositories in `settings.gradle`, and apply the
+plugin with the newest [release](https://github.com/GahahaWang/FastMultiversion/releases)'s version:
 
-- `fastmultiversion-<version>-maven-repository.zip`: the Gradle plugin. Unzip it into your mod, e.g. to
-  `libs/fastmultiversion-repo`, and add it to the plugin repositories in `settings.gradle`:
+```groovy
+pluginManagement {
+    repositories {
+        maven { url = 'https://gahahawang.github.io/FastMultiversion/maven' }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
 
-  ```groovy
-  pluginManagement {
-      repositories {
-          maven { url = file('libs/fastmultiversion-repo') }
-          mavenCentral()
-          gradlePluginPortal()
-      }
-  }
+plugins {
+    id 'cc.gahaha.fastmultiversion' version '<version>'
+}
+```
 
-  plugins {
-      id 'cc.gahaha.fastmultiversion' version '<version>'
-  }
-  ```
+To update, change the version.
 
-- `fastmultiversion-intellij-plugin-<version>.zip`: the IntelliJ plugin. Install it with
-  **Settings → Plugins → ⚙ → Install Plugin from Disk…** and restart the IDE.
+Without network access, unzip the release's `fastmultiversion-<version>-maven-repository.zip` into your mod,
+e.g. to `libs/fastmultiversion-repo`, and use `maven { url = file('libs/fastmultiversion-repo') }` instead.
 
-  From then on, IntelliJ IDEA offers its updates: the plugin adds its own plugin repository. To add it by hand,
-  use **Settings → Plugins → ⚙ → Manage Plugin Repositories…** with
-  `https://gahahawang.github.io/FastMultiversion/updatePlugins.xml`.
+### IntelliJ plugin
+
+Download `fastmultiversion-intellij-plugin-<version>.zip` from the newest release, install it with
+**Settings → Plugins → ⚙ → Install Plugin from Disk…** and restart the IDE.
+
+From then on, IntelliJ IDEA offers its updates: the plugin adds its own plugin repository. To add it by hand,
+use **Settings → Plugins → ⚙ → Manage Plugin Repositories…** with
+`https://gahahawang.github.io/FastMultiversion/updatePlugins.xml`.
 
 ### From source
 
-Install the Gradle plugin into your local Maven repository, and add `mavenLocal()` to the plugin repositories
-instead. The version is a snapshot of the last release, e.g. `0.1.0-SNAPSHOT` (see `gradle.properties`):
+To try changes to FastMultiversion itself, install the Gradle plugin into your local Maven repository, and add
+`mavenLocal()` to the plugin repositories instead. The version is the last release's, from `gradle.properties`,
+plus `-SNAPSHOT`, e.g. `0.4.0-SNAPSHOT`:
 
 ```shell
 ./gradlew publishToMavenLocal
@@ -64,7 +70,7 @@ downloads IntelliJ IDEA 2026.3:
 ./gradlew :intellij-plugin:buildPlugin -PideaPath="C:/Program Files/JetBrains/IntelliJ IDEA 2026.3"
 ```
 
-The plugin is then `intellij-plugin/build/distributions/intellij-plugin-0.1.0-SNAPSHOT.zip`.
+The plugin is then in `intellij-plugin/build/distributions/`.
 
 ## Setting up a mod
 
@@ -78,8 +84,9 @@ With the IntelliJ plugin installed, choose **File → New → Project… → Fas
 
 The wizard creates the project described below, with a Gradle wrapper and a small mod for each loader, and
 imports it. It looks up the newest Fabric Loader, and Fabric API and NeoForge for each Minecraft version; what
-it cannot find online is marked `UNKNOWN` in `gradle.properties`. It puts the Gradle plugin of the same release
-in `libs/fastmultiversion-repo`, or uses `mavenLocal()` for a plugin built from source.
+it cannot find online is marked `UNKNOWN` in `gradle.properties`. The project uses the Gradle plugin of the
+IntelliJ plugin's version from the FastMultiversion Maven repository, or from `mavenLocal()` for an IntelliJ
+plugin built from source.
 
 To set up a project by hand instead, follow the rest of this section.
 
@@ -88,7 +95,7 @@ To set up a project by hand instead, follow the rest of this section.
 ```groovy
 pluginManagement {
     repositories {
-        mavenLocal()    // or the release repository, see Installation
+        maven { url = 'https://gahahawang.github.io/FastMultiversion/maven' }
         maven { url = "https://maven.fabricmc.net/" }
         maven { url = "https://maven.neoforged.net/releases" }
         gradlePluginPortal()
@@ -97,7 +104,7 @@ pluginManagement {
 }
 
 plugins {
-    id 'cc.gahaha.fastmultiversion' version '0.1.0-SNAPSHOT'
+    id 'cc.gahaha.fastmultiversion' version '<version>'    // the newest release
 }
 
 rootProject.name = 'MyMod'

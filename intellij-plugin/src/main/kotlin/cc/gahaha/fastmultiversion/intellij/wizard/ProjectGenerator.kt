@@ -7,11 +7,18 @@ import java.nio.file.Path
 sealed interface PluginRepository {
     val version: String
 
-    /** A release's Maven repository zip, unpacked into the project (libs/fastmultiversion-repo). */
-    data class InProject(override val version: String) : PluginRepository
+    /** FastMultiversion's Maven repository on GitHub Pages, which has every release. */
+    data class Published(override val version: String) : PluginRepository
 
     /** The local Maven repository: a build of FastMultiversion installed with publishToMavenLocal. */
     data class MavenLocal(override val version: String) : PluginRepository
+
+    companion object {
+        const val URL = "https://gahahawang.github.io/FastMultiversion/maven"
+
+        /** The release of [version], this IntelliJ plugin's own version; for a build from source (a snapshot), the local Maven repository. */
+        fun of(version: String): PluginRepository = if (version.endsWith("-SNAPSHOT")) MavenLocal(version) else Published(version)
+    }
 }
 
 /**
@@ -19,8 +26,6 @@ sealed interface PluginRepository {
  * gradle/<kind>/, a Gradle wrapper, and a mod that logs which Minecraft versions it was built for.
  */
 object ProjectGenerator {
-    const val REPOSITORY_DIR = "libs/fastmultiversion-repo"
-
     fun generate(dir: Path, settings: ModSettings, versions: DependencyVersions, plugin: PluginRepository) {
         val values = values(settings, versions, plugin)
         fun write(path: String, template: String) {
@@ -55,7 +60,7 @@ object ProjectGenerator {
         val loom = settings.fabric || settings.common
         val pluginRepositories = buildList {
             when (plugin) {
-                is PluginRepository.InProject -> add("maven { url = file('$REPOSITORY_DIR') }   // FastMultiversion")
+                is PluginRepository.Published -> add("maven { url = \"${PluginRepository.URL}\" }   // FastMultiversion")
                 is PluginRepository.MavenLocal -> add("mavenLocal()   // FastMultiversion, installed with its publishToMavenLocal")
             }
             if (loom) add("maven { url = \"https://maven.fabricmc.net/\" }")

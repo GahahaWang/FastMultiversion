@@ -102,37 +102,23 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             loaders = ModSettings.LOADERS.filter { (it == "fabric" && fabricProperty.get()) || (it == "neoforge" && neoforgeProperty.get()) },
         )
         val pluginVersion = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.version ?: "0.0.0-SNAPSHOT"
-        val lookUp = ThrowableComputable<Pair<DependencyVersions, PluginRepository>, RuntimeException> {
-            Pair(
-                VersionLookup(Fetcher(::readText)).resolve(settings),
-                PluginRepositories.prepare(dir, pluginVersion, PluginRepositories.Downloader(::readBytes)),
-            )
-        }
-        val (versions, plugin) = if (ApplicationManager.getApplication().isDispatchThread) {
+        val lookUp = ThrowableComputable<DependencyVersions, RuntimeException> { VersionLookup(Fetcher(::readText)).resolve(settings) }
+        val versions = if (ApplicationManager.getApplication().isDispatchThread) {
             ProgressManager.getInstance().runProcessWithProgressSynchronously(lookUp, "Looking up Fabric and NeoForge versions", false, project)
         } else {
             lookUp.compute()
         }
-        ProjectGenerator.generate(dir, settings, versions, plugin)
+        ProjectGenerator.generate(dir, settings, versions, PluginRepository.of(pluginVersion))
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(dir)
         linkAndRefreshGradleProject(dir.toString(), project)
-        warnAboutGaps(project, settings, versions, plugin)
+        warnAboutGaps(project, settings, versions)
     }
 
-    private fun warnAboutGaps(project: Project, settings: ModSettings, versions: DependencyVersions, plugin: PluginRepository) {
-        val problems = buildList {
-            if (plugin is PluginRepository.MavenLocal && !plugin.version.endsWith("-SNAPSHOT")) {
-                add("FastMultiversion ${plugin.version} could not be downloaded from its GitHub release, so the project "
-                        + "looks for it in the local Maven repository (mavenLocal() in settings.gradle).")
-            }
-            val missing = versions.missing(settings)
-            if (missing.isNotEmpty()) {
-                add("Not found, set them in gradle.properties: " + missing.joinToString(", ") + ".")
-            }
-        }
-        if (problems.isNotEmpty()) {
+    private fun warnAboutGaps(project: Project, settings: ModSettings, versions: DependencyVersions) {
+        val missing = versions.missing(settings)
+        if (missing.isNotEmpty()) {
             NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATIONS)
-                .createNotification("FastMultiversion project", problems.joinToString("<br>"), NotificationType.WARNING)
+                .createNotification("FastMultiversion project", "Not found, set them in gradle.properties: " + missing.joinToString(", ") + ".", NotificationType.WARNING)
                 .notify(project)
         }
     }
@@ -144,12 +130,6 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
 
         fun readText(url: String): String? = try {
             HttpRequests.request(url).userAgent(USER_AGENT).connectTimeout(5000).readTimeout(15000).readString()
-        } catch (e: IOException) {
-            null
-        }
-
-        fun readBytes(url: String): ByteArray? = try {
-            HttpRequests.request(url).userAgent(USER_AGENT).connectTimeout(5000).readTimeout(60000).readBytes(null)
         } catch (e: IOException) {
             null
         }
