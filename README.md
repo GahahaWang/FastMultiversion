@@ -22,7 +22,8 @@ if (Mc.is("[26.2,)")) {
 
 ### From a release
 
-Each [release](https://github.com/GahahaWang/FastMultiversion/releases) has two files:
+[Releases](https://github.com/GahahaWang/FastMultiversion/releases) are stable versions; pre-releases such as
+`0.2.0-dev.1` have the latest changes. Each has two files:
 
 - `fastmultiversion-<version>-maven-repository.zip`: the Gradle plugin. Unzip it into your mod, e.g. to
   `libs/fastmultiversion-repo`, and add it to the plugin repositories in `settings.gradle`:
@@ -46,8 +47,8 @@ Each [release](https://github.com/GahahaWang/FastMultiversion/releases) has two 
 
 ### From source
 
-Install the Gradle plugin into your local Maven repository, as version `0.1.0-SNAPSHOT`, and add `mavenLocal()`
-to the plugin repositories instead:
+Install the Gradle plugin into your local Maven repository, and add `mavenLocal()` to the plugin repositories
+instead. The version is a snapshot of the last release, e.g. `0.1.0-SNAPSHOT` (see `gradle.properties`):
 
 ```shell
 ./gradlew publishToMavenLocal
