@@ -1,3 +1,9 @@
+## [0.3.0-dev.1](https://github.com/GahahaWang/FastMultiversion/compare/v0.2.0...v0.3.0-dev.1) (2026-11-14)
+
+### ✨ New Features
+
+* Add a New Project wizard for FastMultiversion mods ([a7c435d](https://github.com/GahahaWang/FastMultiversion/commit/a7c435defb0918b0be57d0c7a64bba176a01b484))
+
 ## [0.2.0](https://github.com/GahahaWang/FastMultiversion/compare/v0.1.0...v0.2.0) (2026-11-14)
 
 ### ✨ New Features
