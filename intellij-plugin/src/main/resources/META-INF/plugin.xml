@@ -10,15 +10,21 @@
           with quick fixes to guard it;</li>
       <li>resolves code that does not run in the active Minecraft version against the version it runs in:
           its errors, Go to Declaration, Quick Documentation and member completion use that version's
-          Minecraft, not the active one's.</li>
+          Minecraft, not the active one's;</li>
+      <li>creates new mod projects: File → New → Project → FastMultiversion.</li>
     </ul>
     Needs the multiversion Gradle plugin, which writes build/multiversion/project.properties and the API
     database (task <code>generateApiDatabase</code>).
     ]]></description>
 
     <depends>com.intellij.modules.java</depends>
+    <depends>com.intellij.gradle</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <!-- File → New → Project → FastMultiversion. -->
+        <newProjectWizard.generator implementation="cc.gahaha.fastmultiversion.intellij.wizard.FastMultiversionWizard"/>
+        <notificationGroup id="FastMultiversion" displayType="BALLOON"/>
+
         <localInspection language="JAVA"
                          shortName="McApiRange"
                          displayName="Minecraft API used outside the versions that have it"
