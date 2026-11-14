@@ -9,10 +9,14 @@ import com.intellij.codeInsight.lookup.Lookup;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementPresentation;
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler;
+import com.intellij.ide.highlighter.JavaHighlightingColors;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.lang.documentation.ide.IdeDocumentationTargetProvider;
 import com.intellij.lang.java.JavaDocumentationTarget;
 import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.editor.colors.EditorColorsManager;
+import com.intellij.openapi.editor.colors.TextAttributesKey;
+import com.intellij.openapi.editor.markup.TextAttributes;
 import com.intellij.openapi.module.ModifiableModuleModel;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
@@ -32,6 +36,7 @@ import com.intellij.testFramework.fixtures.IdeaTestFixtureFactory;
 import com.intellij.testFramework.fixtures.JavaCodeInsightTestFixture;
 import com.intellij.testFramework.fixtures.JavaTestFixtureFactory;
 import com.intellij.testFramework.fixtures.TestFixtureBuilder;
+import java.awt.Color;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -432,6 +437,28 @@ public class VersionViewTest extends UsefulTestCase {
         assertTrue(path(documented), path(documented).contains("/mc-26.1/"));
     }
 
+    public void testColorsNamesOfInactiveCodeAsTheIdeDoes() {
+        myFixture.configureByText("Compat.java", COMPAT);
+        List<HighlightInfo> infos = myFixture.doHighlighting(); // names have a severity below INFORMATION
+        // 26.1's setScreen gets the color of a method call, as the IDE gives 26.2's in the active branch.
+        Object activeCall = color(infos, "mc.gui.setScreen(screen)", "setScreen");
+        assertNotNull(describe(infos), activeCall);
+        assertEquals(activeCall, color(infos, "mc.setScreen(screen)", "setScreen"));
+        // 26.1's fields get the color of an instance field.
+        Color field = foreground(JavaHighlightingColors.INSTANCE_FIELD_ATTRIBUTES);
+        assertNotNull(field);
+        assertEquals(field, foreground(color(infos, ": mc.screen", "screen")));
+        assertEquals(field, foreground(color(infos, "mc.options.hideGui", "options")));
+        assertEquals(field, foreground(color(infos, "mc.options.hideGui", "hideGui")));
+    }
+
+    /** The text color of a color scheme key or of attributes. */
+    private static Color foreground(Object color) {
+        TextAttributes attributes = color instanceof TextAttributesKey key
+                ? EditorColorsManager.getInstance().getGlobalScheme().getAttributes(key) : (TextAttributes) color;
+        return attributes == null ? null : attributes.getForegroundColor();
+    }
+
     public void testCompletesTheMembersOfTheBranchVersion() {
         myFixture.configureByText("Compat.java", """
                 import cc.gahaha.fastmultiversion.Mc;
@@ -520,6 +547,32 @@ public class VersionViewTest extends UsefulTestCase {
 
     private String describe(List<HighlightInfo> infos) {
         return infos.stream().map(i -> "'" + text(i) + "': " + i.getDescription()).toList().toString();
+    }
+
+    /**
+     * The color of {@code name} in the first {@code code} of the file: a key of the color scheme, or attributes;
+     * {@code null} if it has none.
+     */
+    private Object color(List<HighlightInfo> infos, String code, String name) {
+        int start = myFixture.getFile().getText().indexOf(code);
+        assertTrue(code, start >= 0);
+        start += code.indexOf(name);
+        TextRange range = TextRange.from(start, name.length());
+        for (HighlightInfo info : infos) {
+            if (info.getStartOffset() == range.getStartOffset() && info.getEndOffset() == range.getEndOffset()
+                    && info.getSeverity().compareTo(HighlightSeverity.WARNING) < 0) {
+                if (info.forcedTextAttributes != null) {
+                    return info.forcedTextAttributes;
+                }
+                if (info.forcedTextAttributesKey != null) {
+                    return info.forcedTextAttributesKey;
+                }
+                if (info.type.getAttributesKey() != null) {
+                    return info.type.getAttributesKey();
+                }
+            }
+        }
+        return null;
     }
 
     private void assertError(List<HighlightInfo> errors, String highlighted, String descriptionStart) {

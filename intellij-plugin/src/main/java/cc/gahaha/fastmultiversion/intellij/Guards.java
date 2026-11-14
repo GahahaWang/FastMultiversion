@@ -25,6 +25,8 @@ import com.intellij.psi.PsiReferenceExpression;
 import com.intellij.psi.PsiStatement;
 import com.intellij.psi.util.PsiUtil;
 import com.siyeh.ig.psiutils.ControlFlowUtils;
+import java.util.List;
+import java.util.Set;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -108,6 +110,38 @@ final class Guards {
 
     long all() {
         return all;
+    }
+
+    /**
+     * Adds the newest version of each piece of code below {@code element} that does not run in the active
+     * version ({@code activeBit}); {@code guard} is the versions in which {@code element} runs.
+     */
+    void inactiveVersions(PsiElement element, long guard, long activeBit, Set<Integer> versions) {
+        if (guard == 0) {
+            return;
+        }
+        if ((guard & activeBit) == 0) {
+            versions.add(MultiversionProject.State.newest(guard));
+        }
+        for (PsiElement child = element.getFirstChild(); child != null; child = child.getNextSibling()) {
+            inactiveVersions(child, guard & narrow(element, child) & own(child), activeBit, versions);
+        }
+    }
+
+    /**
+     * Adds the elements below {@code element} (children first, as the IDE visits them) that do not run in the
+     * active version and whose newest version is {@code version}; {@code guard} as above.
+     */
+    void inactiveElements(PsiElement element, long guard, int version, long activeBit, List<PsiElement> elements) {
+        if ((guard & (1L << version)) == 0) {
+            return; // guards only narrow
+        }
+        for (PsiElement child = element.getFirstChild(); child != null; child = child.getNextSibling()) {
+            inactiveElements(child, guard & narrow(element, child) & own(child), version, activeBit, elements);
+        }
+        if ((guard & activeBit) == 0 && MultiversionProject.State.newest(guard) == version) {
+            elements.add(element);
+        }
     }
 
     /** The versions that get past {@code statement}: after {@code if (!Mc.is(r)) return;} only those in r. */

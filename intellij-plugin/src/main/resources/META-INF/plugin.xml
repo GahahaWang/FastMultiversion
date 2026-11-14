@@ -35,6 +35,7 @@
                          level="ERROR"
                          implementationClass="cc.gahaha.fastmultiversion.intellij.McApiRangeInspection"/>
         <daemon.highlightInfoFilter implementation="cc.gahaha.fastmultiversion.intellij.InactiveCodeHighlightFilter"/>
+        <annotator language="JAVA" implementationClass="cc.gahaha.fastmultiversion.intellij.InactiveNamesAnnotator"/>
 
         <!-- Code that does not run in the active version, resolved in a view of the version it runs in. -->
         <resolveScopeProvider order="first" implementation="cc.gahaha.fastmultiversion.intellij.VersionViewResolveScopeProvider"/>

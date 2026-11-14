@@ -264,13 +264,13 @@ public final class McApiRangeInspection extends AbstractBaseJavaLocalInspectionT
          */
         void inactiveCode() {
             Set<Integer> versions = new TreeSet<>();
-            collectVersions(file, guards.all(), versions);
+            guards.inactiveVersions(file, guards.all(), state.activeBit(), versions);
             for (int version : versions) {
                 Context context = context(1L << version);
                 if (context != null) {
                     try {
                         List<PsiElement> elements = new ArrayList<>();
-                        collectElements(context.resolvedIn, guards.all(), version, elements);
+                        guards.inactiveElements(context.resolvedIn, guards.all(), version, state.activeBit(), elements);
                         javaErrors(context, elements);
                         inspections(context, elements);
                     } catch (ProcessCanceledException e) {
@@ -280,18 +280,6 @@ public final class McApiRangeInspection extends AbstractBaseJavaLocalInspectionT
                         LOG.warn("cannot check " + file.getName() + " in Minecraft " + state.name(version), e);
                     }
                 }
-            }
-        }
-
-        private void collectVersions(PsiElement element, long guard, Set<Integer> versions) {
-            if (guard == 0) {
-                return;
-            }
-            if ((guard & state.activeBit()) == 0) {
-                versions.add(MultiversionProject.State.newest(guard));
-            }
-            for (PsiElement child = element.getFirstChild(); child != null; child = child.getNextSibling()) {
-                collectVersions(child, guard & guards.narrow(element, child) & guards.own(child), versions);
             }
         }
 
@@ -405,19 +393,6 @@ public final class McApiRangeInspection extends AbstractBaseJavaLocalInspectionT
                                 : severity.compareTo(HighlightSeverity.WARNING) >= 0 ? HighlightSeverity.WARNING : null;
                 default -> null;
             };
-        }
-
-        /** The elements (children first, as the IDE visits them) whose newest version is {@code version}, inactive. */
-        private void collectElements(PsiElement element, long guard, int version, List<PsiElement> elements) {
-            if ((guard & (1L << version)) == 0) {
-                return; // guards only narrow
-            }
-            for (PsiElement child = element.getFirstChild(); child != null; child = child.getNextSibling()) {
-                collectElements(child, guard & guards.narrow(element, child) & guards.own(child), version, elements);
-            }
-            if ((guard & state.activeBit()) == 0 && MultiversionProject.State.newest(guard) == version) {
-                elements.add(element);
-            }
         }
 
         /** Whether {@code range} starts at the name of an unresolved reference, which {@link Context#unresolved} reports. */
