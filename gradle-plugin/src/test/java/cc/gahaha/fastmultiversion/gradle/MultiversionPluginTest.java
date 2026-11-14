@@ -1,6 +1,7 @@
 package cc.gahaha.fastmultiversion.gradle;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -208,6 +209,39 @@ class MultiversionPluginTest {
         String leak = gradle(project, ":26.2:neoforge:compileJava", "-Didea.sync.active=true").buildAndFail().getOutput();
         assertTrue(leak.contains("package mod.fabric does not exist"), leak);
         Files.delete(project.resolve("src/neoforge/java/mod/neoforge/Leak.java"));
+    }
+
+    @Test
+    void linksScriptsInTheirOwnDirectoriesToTheActiveVersionInTheIde() throws Exception {
+        Path project = syntheticProject("scriptdirs");
+        write(project.resolve("settings.gradle"), """
+                plugins { id 'cc.gahaha.fastmultiversion' }
+                multiversion {
+                    versions '26.1', '26.2'
+                    loaders 'fabric', 'neoforge'
+                }
+                """);
+        for (String kind : List.of("common", "fabric", "neoforge")) {
+            write(project.resolve("gradle/" + kind + "/" + kind + ".gradle"), """
+                    dependencies {
+                        compileOnly files(rootProject.file("libs/mc-${multiversion.version}.jar"))
+                    }
+                    println "SCRIPT ${multiversion.version} %s linked=${sourceSets.main.resources.srcDirs.contains(rootProject.file('gradle/%s'))}"
+                    """.formatted(kind, kind));
+        }
+
+        // Builds find the scripts there and never ship them.
+        String build = gradle(project, "compileAllVersions").build().getOutput();
+        assertTrue(build.contains("SCRIPT 26.2 fabric linked=false"), build);
+        assertFalse(build.contains("linked=true"), build);
+
+        // In the IDE, each script's directory belongs to the active version's project of its kind.
+        String sync = gradle(project, "help", "-Didea.sync.active=true").build().getOutput();
+        for (String line : List.of("SCRIPT 26.2 common linked=true", "SCRIPT 26.2 fabric linked=true",
+                "SCRIPT 26.2 neoforge linked=true", "SCRIPT 26.1 common linked=false",
+                "SCRIPT 26.1 fabric linked=false", "SCRIPT 26.1 neoforge linked=false")) {
+            assertTrue(sync.contains(line), line + "\n" + sync);
+        }
     }
 
     @Test

@@ -1,5 +1,6 @@
 package cc.gahaha.fastmultiversion.gradle;
 
+import java.io.File;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.ProjectDependency;
@@ -53,6 +54,14 @@ public abstract class MultiversionVersionPlugin implements Plugin<Project> {
         if (loader != null && !version.isCommon() && (!ide || version.isActive())) {
             main.getJava().srcDir(root.file("src/" + loader + "/java"));
             main.getResources().srcDir(root.file("src/" + loader + "/resources"));
+        }
+        File scriptDir = project.getBuildFile().toPath().toAbsolutePath().normalize().getParent().toFile();
+        if (ide && version.isActive() && !scriptDir.equals(root.getProjectDir().toPath().toAbsolutePath().normalize().toFile())) {
+            // The IDE resolves a Gradle script against the module that contains the file. The shared build script
+            // (gradle/<kind>/<kind>.gradle) belongs to the root project's module, which applies none of its plugins,
+            // so the IDE could not resolve loom { }, minecraft, multiversion, ... As a resource directory of the active
+            // version's project, it belongs to this project's module. Only for the IDE: builds do not ship it.
+            main.getResources().srcDir(scriptDir);
         }
         if (ide && layout.common() && loader != null && !version.isCommon() && version.isActive()) {
             // In the IDE the loader projects see src/main through the common project, which has no loader:

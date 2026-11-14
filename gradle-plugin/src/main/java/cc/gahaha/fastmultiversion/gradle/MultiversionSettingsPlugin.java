@@ -28,7 +28,7 @@ public abstract class MultiversionSettingsPlugin implements Plugin<Settings> {
     @Override
     public void apply(Settings settings) {
         MultiversionSettingsExtension extension = settings.getExtensions().create("multiversion", MultiversionSettingsExtension.class);
-        extension.getVersionScript().convention("version.gradle");
+
         settings.getGradle().settingsEvaluated(evaluated -> configure(evaluated, extension));
     }
 
@@ -65,9 +65,11 @@ public abstract class MultiversionSettingsPlugin implements Plugin<Settings> {
         }
         // With common.gradle, each version also gets a project that owns src/main in the IDE and compiles it
         // against Minecraft without a loader, so that no loader's code sees another loader's.
-        boolean common = !loaders.isEmpty() && new File(settings.getRootDir(), MultiversionLayout.COMMON + ".gradle").isFile();
+        File rootDir = settings.getRootDir();
+        boolean common = !loaders.isEmpty() && new File(rootDir, script(rootDir, MultiversionLayout.COMMON)).isFile();
         if (loaders.size() > 1 && !common) {
-            throw new GradleException("multiversion: with several loaders, add common.gradle, the build script of the "
+            throw new GradleException("multiversion: with several loaders, add common.gradle (in gradle/common/ or the "
+                    + "root directory), the build script of the "
                     + "per-version common projects (Minecraft without a loader, plus libraries the shared code uses). "
                     + "In the IDE src/main belongs to them, so each loader sees the shared code but not the other loaders.");
         }
@@ -85,8 +87,9 @@ public abstract class MultiversionSettingsPlugin implements Plugin<Settings> {
 
         Map<String, MultiversionLayout.Target> targets = new HashMap<>();
         for (MultiversionLayout.Target target : layout.targets()) {
-            String script = target.loader() == null ? extension.getVersionScript().get() : target.loader() + ".gradle";
-            if (!new File(settings.getRootDir(), script).isFile()) {
+            String script = target.loader() != null ? script(rootDir, target.loader())
+                    : extension.getVersionScript().getOrElse(script(rootDir, "version"));
+            if (!new File(rootDir, script).isFile()) {
                 throw new GradleException("multiversion: " + script + " is missing; it is the build script of "
                         + target.path() + " (set up Minecraft and the loader there)");
             }
@@ -120,5 +123,16 @@ public abstract class MultiversionSettingsPlugin implements Plugin<Settings> {
                 project.getPluginManager().apply(MultiversionVersionPlugin.class);
             }
         });
+    }
+
+    /**
+     * The build script of the projects of one kind ({@code fabric}, {@code common}, {@code version}, ...), relative
+     * to the root directory: {@code gradle/<kind>/<kind>.gradle} if there is one, else {@code <kind>.gradle}. In its
+     * own directory, the IDE can link the script to the active version's project of that kind (see
+     * {@link MultiversionVersionPlugin}) and so knows the plugins it applies; in the root directory it cannot.
+     */
+    static String script(File rootDir, String kind) {
+        String own = "gradle/" + kind + "/" + kind + ".gradle";
+        return new File(rootDir, own).isFile() ? own : kind + ".gradle";
     }
 }
