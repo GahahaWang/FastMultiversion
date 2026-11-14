@@ -1,3 +1,9 @@
+## [0.4.0](https://github.com/GahahaWang/FastMultiversion/compare/v0.3.0...v0.4.0) (2026-11-14)
+
+### ✨ New Features
+
+* Let IntelliJ IDEA update the plugin from GitHub Pages ([380f88c](https://github.com/GahahaWang/FastMultiversion/commit/380f88c9f8150769ca21422384a4f2926505c943))
+
 ## [0.3.0](https://github.com/GahahaWang/FastMultiversion/compare/v0.2.0...v0.3.0) (2026-11-14)
 
 ### ✨ New Features
