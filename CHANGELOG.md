@@ -1,9 +1,3 @@
-## [0.5.0](https://github.com/GahahaWang/FastMultiversion/compare/v0.4.0...v0.5.0) (2026-11-14)
-
-### ✨ New Features
-
-* Serve the Gradle plugin from a Maven repository on GitHub Pages ([7f4ab08](https://github.com/GahahaWang/FastMultiversion/commit/7f4ab080ac26d145c68065963f1d12444f09b295))
-
 ## [0.4.0](https://github.com/GahahaWang/FastMultiversion/compare/v0.3.0...v0.4.0) (2026-11-14)
 
 ### ✨ New Features
