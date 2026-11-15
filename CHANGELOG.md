@@ -1,3 +1,9 @@
+## [0.7.1](https://github.com/GahahaWang/FastMultiversion/compare/v0.7.0...v0.7.1) (2026-11-15)
+
+### 🐛 Bug Fixes
+
+* Require an IDE restart to install or update the plugin ([f88a29c](https://github.com/GahahaWang/FastMultiversion/commit/f88a29c1b5697c3066b0fca6e656f0c2e2c9ebeb))
+
 ## [0.7.0](https://github.com/GahahaWang/FastMultiversion/compare/v0.6.1...v0.7.0) (2026-11-15)
 
 ### ✨ New Features
