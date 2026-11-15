@@ -14,7 +14,7 @@
       <li>creates new mod projects: File → New → Project → FastMultiversion.</li>
     </ul>
     Needs the multiversion Gradle plugin, which writes build/multiversion/project.properties and the API
-    database (task <code>generateApiDatabase</code>).
+    database (task <code>generateApiDatabase</code>, which the plugin runs after each Gradle sync).
     ]]></description>
 
     <depends>com.intellij.modules.java</depends>
@@ -47,4 +47,10 @@
         <completion.contributor language="JAVA" order="first"
                                 implementationClass="cc.gahaha.fastmultiversion.intellij.RangeCompletionContributor"/>
     </extensions>
+
+    <projectListeners>
+        <!-- After a Gradle sync: generateApiDatabase, then code of other versions is checked again. -->
+        <listener class="cc.gahaha.fastmultiversion.intellij.GradleSyncListener"
+                  topic="com.intellij.openapi.externalSystem.service.project.manage.ProjectDataImportListener"/>
+    </projectListeners>
 </idea-plugin>

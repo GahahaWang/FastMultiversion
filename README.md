@@ -321,8 +321,10 @@ Put such code inside `Mc.is` or `@IfMc` with the range the message gives.
 ## Working in IntelliJ IDEA
 
 1. Open the root directory and let IntelliJ import the Gradle project.
-2. Run `./gradlew generateApiDatabase` once, and again after you change the versions or dependencies. The IDE
-   plugin reads this database. Any build also updates it.
+2. The IDE plugin reads the API database in `build/multiversion/`. It runs `./gradlew generateApiDatabase`
+   itself after each Gradle sync, and when the database is missing (e.g. after the build directory was
+   deleted), and then checks code of other versions again. Without the plugin, run it yourself after you change
+   the versions or dependencies; any build also updates it.
 
 The IDE works with the **active version and loader**: the newest version and the first loader unless you set
 them. To switch, set them in `gradle.properties` and reload the Gradle project:

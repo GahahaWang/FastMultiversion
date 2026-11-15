@@ -3,8 +3,12 @@ package cc.gahaha.fastmultiversion.intellij;
 import cc.gahaha.fastmultiversion.apidb.ApiClass;
 import cc.gahaha.fastmultiversion.apidb.ApiDatabase;
 import cc.gahaha.fastmultiversion.versioning.McVersion;
+import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.util.ModificationTracker;
+import com.intellij.openapi.util.SimpleModificationTracker;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.ModuleUtilCore;
@@ -28,7 +32,8 @@ import org.jetbrains.annotations.TestOnly;
 /**
  * The project's multiversion setup, read from what the Gradle plugin writes:
  * {@code build/multiversion/project.properties} (versions, active version, loaders, database path) and the
- * API database it points to. Reloaded when those files change; checked at most every couple of seconds.
+ * API database it points to. Reloaded when those files change; checked at most every couple of seconds, and
+ * right away after a Gradle sync ({@link ApiDatabaseUpdater}).
  */
 @Service(Service.Level.PROJECT)
 public final class MultiversionProject {
@@ -90,11 +95,14 @@ public final class MultiversionProject {
     }
 
     private final Project project;
+    private final SimpleModificationTracker changes = new SimpleModificationTracker();
     private State state;
     private State override;
     private long lastCheck;
     private long infoStamp = -1;
     private long dbStamp = -1;
+    /** The info file's stamp when the database was found missing and its generation started. */
+    private long missingDatabaseFor = -1;
 
     public MultiversionProject(Project project) {
         this.project = project;
@@ -107,6 +115,33 @@ public final class MultiversionProject {
     @TestOnly
     public void setForTests(@Nullable ApiDatabase db, @Nullable McVersion active) {
         override = db == null ? null : create(db, db.indexOf(active), Layout.SINGLE);
+        changes.incModificationCount();
+    }
+
+    /** Whether {@code projectDir} is the root of a FastMultiversion project, by what its Gradle plugin writes. */
+    static boolean isMultiversion(Path projectDir) {
+        return Files.isRegularFile(projectDir.resolve(INFO));
+    }
+
+    /**
+     * Changes whenever the setup does (a new database, another active version, ...) or is {@link #reload()
+     * reloaded}: what is made from the setup, such as the {@link VersionViews views}, depends on it.
+     */
+    public ModificationTracker tracker() {
+        return changes;
+    }
+
+    /**
+     * Reads the setup again now, e.g. after the database was generated or the project was synced, and has the
+     * open files checked again, so that code of other versions is resolved with the new database and libraries.
+     */
+    public void reload() {
+        synchronized (this) {
+            lastCheck = 0;
+        }
+        state();
+        changes.incModificationCount();
+        restartHighlighting();
     }
 
     /** The setup, or {@code null} if this is no multiversion project or its database was not generated yet. */
@@ -121,22 +156,27 @@ public final class MultiversionProject {
         lastCheck = now;
         String base = project.getBasePath();
         if (base == null) {
-            return state = null;
+            return update(null);
         }
         try {
             Path info = Path.of(base).resolve(INFO);
             if (!Files.isRegularFile(info)) {
-                return state = null;
+                return update(null);
             }
             Properties properties = new Properties();
             try (Reader reader = Files.newBufferedReader(info, StandardCharsets.UTF_8)) {
                 properties.load(reader);
             }
+            long newInfoStamp = Files.getLastModifiedTime(info).toMillis();
             Path db = Path.of(base).resolve(properties.getProperty("apidb", "build/multiversion/api.mcapi"));
             if (!Files.isRegularFile(db)) {
-                return state = null;
+                // E.g. after the build directory was deleted: a sync writes the info but runs no tasks.
+                if (missingDatabaseFor != newInfoStamp) {
+                    missingDatabaseFor = newInfoStamp; // once per sync, also if generating it fails
+                    ApiDatabaseUpdater.getInstance(project).update(base);
+                }
+                return update(null);
             }
-            long newInfoStamp = Files.getLastModifiedTime(info).toMillis();
             long newDbStamp = Files.getLastModifiedTime(db).toMillis();
             if (state != null && newInfoStamp == infoStamp && newDbStamp == dbStamp) {
                 return state;
@@ -150,11 +190,26 @@ public final class MultiversionProject {
                     Boolean.parseBoolean(properties.getProperty("common", "false")));
             infoStamp = newInfoStamp;
             dbStamp = newDbStamp;
-            return state = active < 0 ? null : create(database, active, layout);
+            return update(active < 0 ? null : create(database, active, layout));
         } catch (IOException | RuntimeException e) {
             LOG.warn("cannot load the multiversion setup of " + base, e);
-            return state = null;
+            return update(null);
         }
+    }
+
+    /** Sets the loaded setup; if it changed, the open files are checked again with it. */
+    private @Nullable State update(@Nullable State loaded) {
+        if (loaded != state) {
+            state = loaded;
+            changes.incModificationCount();
+            restartHighlighting();
+        }
+        return state;
+    }
+
+    private void restartHighlighting() {
+        ApplicationManager.getApplication().invokeLater(() -> DaemonCodeAnalyzer.getInstance(project)
+                .restart("FastMultiversion setup changed"), project.getDisposed());
     }
 
     /**

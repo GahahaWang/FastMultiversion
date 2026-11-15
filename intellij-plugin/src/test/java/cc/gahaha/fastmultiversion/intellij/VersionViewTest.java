@@ -25,6 +25,7 @@ import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess;
 import com.intellij.platform.backend.documentation.DocumentationTarget;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiJavaFile;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiParameter;
 import com.intellij.testFramework.IndexingTestUtil;
@@ -455,6 +456,21 @@ public class VersionViewTest extends UsefulTestCase {
         EditorColorsScheme theme = (EditorColorsScheme) EditorColorsManager.getInstance().getGlobalScheme().clone();
         theme.setAttributes(JavaHighlightingColors.METHOD_CALL_ATTRIBUTES, new TextAttributes(Color.RED, null, null, null, Font.PLAIN));
         assertEquals(Color.RED, setScreen.getTextAttributes(null, theme).getForegroundColor());
+    }
+
+    public void testReloadingTheSetupRebuildsTheViews() {
+        myFixture.configureByText("Compat.java", COMPAT);
+        MultiversionProject setup = MultiversionProject.getInstance(myFixture.getProject());
+        PsiJavaFile file = (PsiJavaFile) myFixture.getFile();
+        PsiJavaFile view = VersionViews.of(setup.state(), file, 0);
+        assertNotNull(view);
+        assertSame(view, VersionViews.of(setup.state(), file, 0));
+
+        long before = setup.tracker().getModificationCount();
+        setup.reload(); // as after a Gradle sync and generateApiDatabase
+        assertTrue(setup.tracker().getModificationCount() > before);
+        assertNotSame(view, VersionViews.of(setup.state(), file, 0));
+        assertEmpty(describe(errors()), errors()); // and checked with the new views
     }
 
     public void testCompletesTheMembersOfTheBranchVersion() {

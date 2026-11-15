@@ -49,11 +49,12 @@ final class VersionViews {
     private VersionViews() {
     }
 
-    /** The view of {@code original} in {@code version}, kept until the file or the project structure changes. */
+    /** The view of {@code original} in {@code version}, kept until the file, the project structure or the setup changes. */
     static @Nullable PsiJavaFile of(MultiversionProject.State state, PsiJavaFile original, int version) {
         Map<Integer, Optional<PsiJavaFile>> views = CachedValuesManager.getCachedValue(original, VIEWS, () ->
                 CachedValueProvider.Result.create(new ConcurrentHashMap<>(), original,
-                        ProjectRootModificationTracker.getInstance(original.getProject())));
+                        ProjectRootModificationTracker.getInstance(original.getProject()),
+                        MultiversionProject.getInstance(original.getProject()).tracker()));
         return views.computeIfAbsent(version, v -> Optional.ofNullable(create(state, original, original.getText(), v))).orElse(null);
     }
 
