@@ -1,3 +1,9 @@
+## [0.7.0](https://github.com/GahahaWang/FastMultiversion/compare/v0.6.1...v0.7.0) (2026-11-15)
+
+### ✨ New Features
+
+* Update the API database after each Gradle sync ([4564fff](https://github.com/GahahaWang/FastMultiversion/commit/4564fffb973f618439d99fa16385013b55c7ad49))
+
 ## [0.6.1](https://github.com/GahahaWang/FastMultiversion/compare/v0.6.0...v0.6.1) (2026-11-14)
 
 ### 🐛 Bug Fixes
