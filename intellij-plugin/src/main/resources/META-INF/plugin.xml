@@ -1,4 +1,6 @@
-<idea-plugin>
+<!-- Installed, updated and removed with an IDE restart: the plugin keeps caches on PSI files and its views,
+     which an update in place could leave behind. -->
+<idea-plugin require-restart="true">
     <id>cc.gahaha.fastmultiversion</id>
     <name>FastMultiversion</name>
     <vendor>gahaha</vendor>
