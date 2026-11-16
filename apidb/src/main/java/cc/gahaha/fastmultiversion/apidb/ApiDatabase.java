@@ -258,6 +258,87 @@ public final class ApiDatabase {
         return mask;
     }
 
+    /**
+     * For a method call whose result is only used to reach another member, as in {@code m().n()}: the versions
+     * in which {@code m} can be called through {@code owner} as in {@code reference} except for the type it
+     * returns (the same parameters and static-ness, at least as visible), and {@code next} can be used on what
+     * it returns there exactly as on what it returns in {@code reference}. The same source compiles in each of
+     * them, e.g. when {@code m} returns a class that moved to another package: no type is written down.
+     *
+     * <p>Returns no version if {@code m} returns no class in {@code reference}, or {@code next} cannot be found on
+     * it; versions in which something cannot be known count, as for {@link #compatible}.
+     */
+    public long compatibleChain(String owner, String name, String descriptor, MemberKind nextKind, String nextName,
+                                String nextDescriptor, int reference) {
+        Resolution ref = resolve(MemberKind.METHOD, owner, name, descriptor, reference);
+        String refReturns = returnedClass(descriptor);
+        if (ref.status() != Resolution.Status.FOUND || refReturns == null) {
+            return 0;
+        }
+        Resolution refNext = resolve(nextKind, refReturns, nextName, nextDescriptor, reference);
+        if (refNext.status() != Resolution.Status.FOUND) {
+            return 0;
+        }
+        Set<String> candidates = methodDescriptors(owner, name, descriptor.substring(0, descriptor.indexOf(')') + 1));
+        long mask = 0;
+        for (int v = 0; v < versions.size(); v++) {
+            for (String candidate : candidates) {
+                Resolution r = resolve(MemberKind.METHOD, owner, name, candidate, v);
+                if (r.status() == Resolution.Status.UNKNOWN) {
+                    mask |= 1L << v;
+                    break;
+                }
+                String returns = returnedClass(candidate);
+                if (r.status() != Resolution.Status.FOUND || returns == null
+                        || isStatic(r.shape().access()) != isStatic(ref.shape().access())
+                        || visibility(r.shape().access()) < visibility(ref.shape().access())) {
+                    continue;
+                }
+                Resolution next = resolve(nextKind, returns, nextName, nextDescriptor, v);
+                if (next.status() == Resolution.Status.UNKNOWN
+                        || (next.status() == Resolution.Status.FOUND && usableAs(next.shape(), refNext.shape()))) {
+                    mask |= 1L << v;
+                    break;
+                }
+            }
+        }
+        return mask;
+    }
+
+    /** The class a method descriptor returns, e.g. {@code a/B} for {@code ()La/B;}; {@code null} for anything else. */
+    private static String returnedClass(String descriptor) {
+        String returns = descriptor.substring(descriptor.indexOf(')') + 1);
+        return returns.startsWith("L") && returns.endsWith(";") ? returns.substring(1, returns.length() - 1) : null;
+    }
+
+    /**
+     * Every descriptor that a method {@code name} with the parameters {@code parameters} (e.g. {@code (I)}) has in
+     * {@code owner} or its supertypes, in any version.
+     */
+    private Set<String> methodDescriptors(String owner, String name, String parameters) {
+        Set<String> descriptors = new HashSet<>();
+        Set<String> seen = new HashSet<>();
+        Deque<String> pending = new ArrayDeque<>(List.of(owner));
+        while (!pending.isEmpty()) {
+            ApiClass c = classes.get(pending.poll());
+            if (c == null || !seen.add(c.name())) {
+                continue;
+            }
+            for (MemberKey key : c.methods().keySet()) {
+                if (key.name().equals(name) && key.descriptor().startsWith(parameters)) {
+                    descriptors.add(key.descriptor());
+                }
+            }
+            for (ApiClass.Variant<ClassShape> shape : c.shapes()) {
+                if (shape.shape().superName() != null) {
+                    pending.add(shape.shape().superName());
+                }
+                pending.addAll(shape.shape().interfaces());
+            }
+        }
+        return descriptors;
+    }
+
     private static boolean usableAs(MemberShape shape, MemberShape reference) {
         return isStatic(shape.access()) == isStatic(reference.access())
                 && visibility(shape.access()) >= visibility(reference.access())

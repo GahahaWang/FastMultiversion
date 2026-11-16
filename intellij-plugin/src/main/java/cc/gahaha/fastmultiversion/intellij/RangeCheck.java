@@ -15,6 +15,7 @@ import com.intellij.psi.PsiImportStatementBase;
 import com.intellij.psi.PsiJavaCodeReferenceElement;
 import com.intellij.psi.PsiMember;
 import com.intellij.psi.PsiMethod;
+import com.intellij.psi.PsiMethodCallExpression;
 import com.intellij.psi.PsiModifier;
 import com.intellij.psi.PsiNewExpression;
 import com.intellij.psi.PsiPackageStatement;
@@ -22,6 +23,7 @@ import com.intellij.psi.PsiParameter;
 import com.intellij.psi.PsiReferenceExpression;
 import com.intellij.psi.PsiTypeParameter;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.psi.util.PsiUtil;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -68,12 +70,13 @@ final class RangeCheck {
             }
             case PsiMethod method -> {
                 if (!qualifierIsReported(reference, guard)) {
-                    checkMember(MemberKind.METHOD, method, JvmNames.descriptor(method), start(reference, method), at, guard);
+                    checkMember(MemberKind.METHOD, method, JvmNames.descriptor(method), start(reference, method), at, guard, chain(reference));
                 }
             }
             case PsiField field -> {
                 if (!qualifierIsReported(reference, guard)) {
-                    checkMember(MemberKind.FIELD, field, JvmNames.descriptor(field.getType()), start(reference, field), at, guard);
+                    checkMember(MemberKind.FIELD, field, JvmNames.descriptor(field.getType()), start(reference, field), at, guard,
+                            chain(reference));
                 }
             }
             case null, default -> {
@@ -93,7 +96,7 @@ final class RangeCheck {
         if (checkClass(c, at, guard)) {
             PsiMethod constructor = expression.resolveConstructor();
             if (constructor != null) {
-                checkMember(MemberKind.METHOD, constructor, JvmNames.descriptor(constructor), c, at, guard);
+                checkMember(MemberKind.METHOD, constructor, JvmNames.descriptor(constructor), c, at, guard, 0);
             }
         }
     }
@@ -138,7 +141,9 @@ final class RangeCheck {
         return report(db.classCompatible(name, referenceVersion), api.versions(), guard, at, "'" + c.getQualifiedName() + "'");
     }
 
-    private void checkMember(MemberKind kind, PsiMember member, String descriptor, PsiClass start, PsiElement at, long guard) {
+    /** {@code chain}: versions in which the member works anyway, as part of an {@code m().n} chain ({@link #chain}). */
+    private void checkMember(MemberKind kind, PsiMember member, String descriptor, PsiClass start, PsiElement at, long guard,
+                             long chain) {
         if (descriptor == null) {
             return;
         }
@@ -147,8 +152,47 @@ final class RangeCheck {
         if (owner == null) {
             return;
         }
-        long compatible = db.compatible(kind, owner, memberName, descriptor, referenceVersion);
-        report(compatible, db.resolvable(kind, owner, memberName, descriptor), guard, at, describe(member));
+        long compatible = db.compatible(kind, owner, memberName, descriptor, referenceVersion) | chain;
+        report(compatible, db.resolvable(kind, owner, memberName, descriptor) | chain, guard, at, describe(member));
+    }
+
+    /**
+     * For {@code reference} as {@code m} or {@code n} of {@code m().n}: the versions in which this source works
+     * although {@code m} returns another class there ({@link ApiDatabase#compatibleChain}), as the javac plugin
+     * finds them; 0 for any other reference.
+     */
+    private long chain(PsiJavaCodeReferenceElement reference) {
+        if (!(reference instanceof PsiReferenceExpression expression)) {
+            return 0;
+        }
+        PsiMethodCallExpression call;
+        PsiReferenceExpression next;
+        if (PsiUtil.skipParenthesizedExprDown(expression.getQualifierExpression()) instanceof PsiMethodCallExpression qualifier) {
+            call = qualifier; // reference is n
+            next = expression;
+        } else if (expression.getParent() instanceof PsiMethodCallExpression c && c.getMethodExpression() == expression
+                && PsiUtil.skipParenthesizedExprUp(c.getParent()) instanceof PsiReferenceExpression n
+                && PsiUtil.skipParenthesizedExprDown(n.getQualifierExpression()) == c) {
+            call = c; // reference is m
+            next = n;
+        } else {
+            return 0;
+        }
+        PsiMethod method = call.resolveMethod();
+        String descriptor = method == null ? null : JvmNames.descriptor(method);
+        String owner = descriptor == null ? null
+                : owner(MemberKind.METHOD, method, method.getName(), descriptor, start(call.getMethodExpression(), method));
+        String nextName = next.getReferenceName();
+        if (owner == null || nextName == null) {
+            return 0;
+        }
+        return switch (next.resolve()) {
+            case PsiMethod m when JvmNames.descriptor(m) != null -> db.compatibleChain(owner, method.getName(), descriptor,
+                    MemberKind.METHOD, nextName, JvmNames.descriptor(m), referenceVersion);
+            case PsiField f when JvmNames.descriptor(f.getType()) != null -> db.compatibleChain(owner, method.getName(), descriptor,
+                    MemberKind.FIELD, nextName, JvmNames.descriptor(f.getType()), referenceVersion);
+            case null, default -> 0;
+        };
     }
 
     /** The class the member is used through, as the javac plugin determines it. */

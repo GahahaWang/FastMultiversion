@@ -498,6 +498,24 @@ public class VersionViewTest extends UsefulTestCase {
         assertEquals(minecraft, key(info(infos, "import mc.Options", "Options")));
     }
 
+    public void testAcceptsAChainThroughAMethodThatReturnsAnotherClass() {
+        // Data.range() returns mc.old.Range in 26.1 and mc.pos.Range in 26.2; both have within(int).
+        myFixture.configureByText("Chain.java", """
+                class Chain {
+                    static boolean within() { return mc.Data.range().within(1); }
+                }
+                """);
+        assertEmpty(describe(errors()), errors());
+
+        // Written down, the returned class is another one in each version: still reported.
+        myFixture.configureByText("Typed.java", """
+                class Typed {
+                    static boolean within() { mc.pos.Range range = mc.Data.range(); return range.within(1); }
+                }
+                """);
+        assertError(errors(), "Range", "'mc.pos.Range' only exists in [26.2,)");
+    }
+
     public void testReloadingTheSetupRebuildsTheViews() {
         myFixture.configureByText("Compat.java", COMPAT);
         MultiversionProject setup = MultiversionProject.getInstance(myFixture.getProject());
@@ -640,13 +658,17 @@ public class VersionViewTest extends UsefulTestCase {
                     "mc/Options.java", "package mc; public class Options { public boolean hideGui; }",
                     "mc/Minecraft.java", "package mc; public class Minecraft { public Screen screen; public Options options; "
                             + "public void setScreen(Screen screen) {} }",
-                    "mc/oldpkg/Pose.java", "package mc.oldpkg; public class Pose { public String name() { return \"old\"; } }"));
+                    "mc/oldpkg/Pose.java", "package mc.oldpkg; public class Pose { public String name() { return \"old\"; } }",
+                    "mc/old/Range.java", "package mc.old; public class Range { public boolean within(int y) { return y > 0; } }",
+                    "mc/Data.java", "package mc; public class Data { public static mc.old.Range range() { return null; } }"));
             Path current = compile(root, "mc-26.2", Map.of(
                     "mc/Screen.java", "package mc; public class Screen {}",
                     "mc/Gui.java", "package mc; public class Gui { public Screen screen() { return null; } "
                             + "public void setScreen(Screen screen) {} }",
                     "mc/Minecraft.java", "package mc; public class Minecraft { public final Gui gui = new Gui(); }",
-                    "mc/newpkg/Pose.java", "package mc.newpkg; public class Pose { public String name() { return \"new\"; } }"));
+                    "mc/newpkg/Pose.java", "package mc.newpkg; public class Pose { public String name() { return \"new\"; } }",
+                    "mc/pos/Range.java", "package mc.pos; public class Range { public boolean within(int y) { return y > 0; } }",
+                    "mc/Data.java", "package mc; public class Data { public static mc.pos.Range range() { return null; } }"));
             database = ApiDbGenerator.generate(List.of(
                     new VersionJars(McVersion.parse("26.1"), List.of(old)),
                     new VersionJars(McVersion.parse("26.2"), List.of(current))));

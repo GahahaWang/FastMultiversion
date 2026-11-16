@@ -325,6 +325,18 @@ import com.mojang.renderpearl.vertex.*;  // newer versions
 Each version uses the package it has. Importing the class from both packages by name also builds, but the IDE
 only resolves the name when the active version's import comes first.
 
+A method that returns another class in some versions can be called once for all of them, as long as its
+result is only used right away and every version's class has what is used:
+
+```java
+// getRenderLayerRange() returns a malilib util.LayerRange before 26.2 and a util.position.LayerRange since;
+// both have isPositionWithinRange(BlockPos).
+return DataManager.getRenderLayerRange().isPositionWithinRange(pos);
+```
+
+Storing the result in a variable of the class, or passing it on, still needs `Mc.is`: written down, the class
+is another one in each version.
+
 ## Building
 
 | Command | Result |

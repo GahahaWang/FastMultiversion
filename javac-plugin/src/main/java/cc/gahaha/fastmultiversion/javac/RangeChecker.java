@@ -20,11 +20,14 @@ import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
 import com.sun.tools.javac.tree.JCTree.JCMemberReference;
 import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
+import com.sun.tools.javac.tree.JCTree.JCMethodInvocation;
 import com.sun.tools.javac.tree.JCTree.JCNewClass;
+import com.sun.tools.javac.tree.TreeInfo;
 import com.sun.tools.javac.tree.TreeScanner;
 import com.sun.tools.javac.util.Context;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -49,6 +52,8 @@ final class RangeChecker extends TreeScanner {
     private final Map<JCTree, Long> guards;
     private final Types types;
     private final Deque<ClassSymbol> classes = new ArrayDeque<>();
+    /** Per reference of an {@code m().n} chain, the versions in which it works anyway: see {@link #chain}. */
+    private final Map<JCTree, Long> chains = new HashMap<>();
     private long guard;
 
     RangeChecker(MultiversionListener host, CompilationUnitTree unit, ApiDatabase db, int target,
@@ -92,8 +97,35 @@ final class RangeChecker extends TreeScanner {
 
     @Override
     public void visitSelect(JCFieldAccess tree) {
+        chain(tree);
         if (check(tree.sym, tree, tree.selected.type)) {
             super.visitSelect(tree);
+        }
+    }
+
+    /**
+     * For {@code m().n}: notes for the checks of {@code m} and {@code n} the versions in which this source works
+     * although {@code m} returns another class there ({@link ApiDatabase#compatibleChain}).
+     */
+    private void chain(JCFieldAccess next) {
+        if (!(TreeInfo.skipParens(next.selected) instanceof JCMethodInvocation call)
+                || !(TreeInfo.symbol(call.meth) instanceof MethodSymbol method)
+                || next.sym == null || (next.sym.kind != Kind.MTH && next.sym.kind != Kind.VAR)) {
+            return;
+        }
+        String descriptor = methodDescriptor(method);
+        String owner = qualifier(MemberKind.METHOD, method, descriptor,
+                call.meth instanceof JCFieldAccess select ? select.selected.type : null);
+        if (owner == null) {
+            return;
+        }
+        boolean nextIsMethod = next.sym.kind == Kind.MTH;
+        long chain = db.compatibleChain(owner, method.name.toString(), descriptor,
+                nextIsMethod ? MemberKind.METHOD : MemberKind.FIELD, next.sym.name.toString(),
+                nextIsMethod ? methodDescriptor((MethodSymbol) next.sym) : descriptor(next.sym.type), target);
+        if (chain != 0) {
+            chains.put(next, chain);
+            chains.put(call.meth, chain);
         }
     }
 
@@ -164,8 +196,9 @@ final class RangeChecker extends TreeScanner {
             return true;
         }
         String name = sym.name.toString();
-        long compatible = db.compatible(kind, owner, name, descriptor, target);
-        long present = db.resolvable(kind, owner, name, descriptor);
+        long chain = chains.getOrDefault(at, 0L);
+        long compatible = db.compatible(kind, owner, name, descriptor, target) | chain;
+        long present = db.resolvable(kind, owner, name, descriptor) | chain;
         return report(compatible, present, at, describe(sym));
     }
 

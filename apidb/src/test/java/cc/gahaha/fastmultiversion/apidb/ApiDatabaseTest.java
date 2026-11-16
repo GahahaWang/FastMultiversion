@@ -41,6 +41,12 @@ class ApiDatabaseTest {
         method("mc/Sub", V1, "old", "()V", PUBLIC, null);
         method("mc/Sub", V1 | V2, "make", "()Lmc/A;", PUBLIC, null);
         method("mc/Sub", V3, "make", "()Lmc/B;", PUBLIC, null);
+        // What make() returns: A (kept in 26.3, like a deprecated old class) and B both have use(int).
+        cls("mc/A", ALL, PUBLIC, "java/lang/Object");
+        method("mc/A", ALL, "use", "(I)Z", PUBLIC, null);
+        method("mc/A", ALL, "onlyA", "()V", PUBLIC, null);
+        cls("mc/B", V3, PUBLIC, "java/lang/Object");
+        method("mc/B", V3, "use", "(I)Z", PUBLIC, null);
 
         // Same descriptor, but the generic signature, static-ness or visibility changes.
         cls("mc/Stack", ALL, PUBLIC, "java/lang/Object");
@@ -91,6 +97,17 @@ class ApiDatabaseTest {
         assertEquals(V1, db.compatible(METHOD, "mc/Stack", "count", "()I", 0), "static from 26.2");
         assertEquals(ALL, db.compatible(METHOD, "mc/Stack", "hook", "()V", 0), "protected use works where it is public");
         assertEquals(V2 | V3, db.compatible(METHOD, "mc/Stack", "hook", "()V", 1), "public use fails where it is protected");
+    }
+
+    @Test
+    void chainsWorkThroughWhateverTheMethodReturns() {
+        assertEquals(V1 | V2, db.compatible(METHOD, "mc/Sub", "make", "()Lmc/A;", 0), "make() itself returns another class in 26.3");
+        // make().use(1) compiles in every version: each version calls use on what its make() returns.
+        assertEquals(ALL, db.compatibleChain("mc/Sub", "make", "()Lmc/A;", METHOD, "use", "(I)Z", 0));
+        assertEquals(ALL, db.compatibleChain("mc/Sub", "make", "()Lmc/B;", METHOD, "use", "(I)Z", 2));
+        // make().onlyA() does not: B lacks it.
+        assertEquals(V1 | V2, db.compatibleChain("mc/Sub", "make", "()Lmc/A;", METHOD, "onlyA", "()V", 0));
+        assertEquals(0, db.compatibleChain("mc/Stack", "count", "()I", METHOD, "use", "(I)Z", 0), "no class is returned");
     }
 
     @Test

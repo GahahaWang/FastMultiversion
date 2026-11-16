@@ -45,6 +45,12 @@ class RangeCheckTest {
                 """, """
                 package mc;
                 public class Screen { public void render(int x) {} }
+                """, """
+                package mc.old;
+                public class Range { public boolean within(int y) { return y > 0; } }
+                """, """
+                package mc;
+                public class Data { public static mc.old.Range range() { return new mc.old.Range(); } }
                 """);
         api262 = TestCompiler.jar(temp, "mc-26.2", item, """
                 package mc;
@@ -65,11 +71,39 @@ class RangeCheckTest {
                 """, """
                 package mc;
                 public class Screen { public void render(long x) {} }
+                """, """
+                package mc.pos;
+                public class Range { public boolean within(int y) { return y > 0; } }
+                """, """
+                package mc;
+                public class Data { public static mc.pos.Range range() { return new mc.pos.Range(); } }
                 """);
         database = temp.resolve("api.mcapi");
         ApiDbGenerator.generate(List.of(
                 new VersionJars(McVersion.parse("26.1"), List.of(api261)),
                 new VersionJars(McVersion.parse("26.2"), List.of(api262)))).write(database);
+    }
+
+    @Test
+    void acceptsAChainThroughAMethodThatReturnsAnotherClass() throws Exception {
+        // Data.range() returns mc.old.Range in 26.1 and mc.pos.Range in 26.2; both have within(int).
+        String chain = """
+                package mod;
+                public class Chain {
+                    public static boolean within() { return mc.Data.range().within(1); }
+                }
+                """;
+        compiler("26.1").source(chain).compile().assertSuccess();
+        compiler("26.2").source(chain).compile().assertSuccess();
+
+        // Written down, the returned class is another one in each version: still reported.
+        var typed = compiler("26.2").source("""
+                package mod;
+                public class Typed {
+                    public static boolean within() { mc.pos.Range range = mc.Data.range(); return range.within(1); }
+                }
+                """).compile().assertFailure();
+        assertTrue(typed.errors().contains("'mc.pos.Range' only exists in [26.2,)"), typed.errors());
     }
 
     private static TestCompiler compiler(String target) {
