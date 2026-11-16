@@ -1,15 +1,20 @@
-"""Writes the site that GitHub Pages serves, from the GitHub releases.
+"""Writes the site that GitHub Pages serves, from the GitHub releases and pre-releases.
 
 Usage: gh api repos/OWNER/REPO/releases | python3 pages.py intellij-plugin/build.gradle OUTPUT_DIR
 
-  maven/             a Maven repository with the Gradle plugin of every release: the releases'
-                     fastmultiversion-<version>-maven-repository.zip, merged, with maven-metadata.xml listing
-                     all versions
-  updatePlugins.xml  an IntelliJ plugin repository with the newest release of the IntelliJ plugin
-  index.html         how to use both
+Two channels:
 
-Mods put maven/ in the plugin repositories of settings.gradle. IntelliJ IDEA checks a repository added in
-Settings → Plugins → ⚙ → Manage Plugin Repositories for updates; the plugin adds this one by itself (see
+  release  maven/                 a Maven repository with the Gradle plugin of every release
+           updatePlugins.xml      an IntelliJ plugin repository with the newest release of the IntelliJ plugin
+  dev      maven-dev/             the same, plus the pre-releases (x.y.z-dev.n) newer than the last release
+           updatePlugins-dev.xml  the newest of those
+  index.html                      how to use them
+
+A Maven repository merges the releases' fastmultiversion-<version>-maven-repository.zip, with
+maven-metadata.xml listing all its versions. Mods put maven/ (with version 'latest.release') or maven-dev/ (with
+'latest.integration') in the plugin repositories of settings.gradle; Gradle orders x.y.z-dev.n before x.y.z, so
+the dev channel gets the release once it is out. IntelliJ IDEA checks a repository added in Settings → Plugins →
+⚙ → Manage Plugin Repositories for updates; the plugin adds its channel's by itself (see
 PluginRepositoryRegistrar). GitHub Pages serves a whole branch, so each run writes the site from all releases.
 """
 import hashlib
@@ -29,13 +34,26 @@ MAVEN_ASSET = re.compile(r"fastmultiversion-.+-maven-repository\.zip")
 
 
 def version_key(version):
-    return tuple(int(part) for part in re.findall(r"\d+", version))
+    """Orders versions as Gradle and semantic versioning do: x.y.z-dev.n before x.y.z, dev.2 before dev.10."""
+    core, _, pre = version.removeprefix("v").partition("-")
+    numbers = tuple(int(part) for part in re.findall(r"\d+", core))
+    if not pre:
+        return numbers, 1, ()
+    return numbers, 0, tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in pre.split("."))
 
 
-def releases_newest_first(releases):
-    """The published releases, without drafts and pre-releases, the newest version first."""
-    published = [r for r in releases if not r["draft"] and not r["prerelease"]]
-    return sorted(published, key=lambda r: version_key(r["tag_name"]), reverse=True)
+def version_of(release):
+    return release["tag_name"].removeprefix("v")
+
+
+def channels(releases):
+    """The release channel's releases and the dev channel's (releases, and pre-releases newer than them), newest first."""
+    published = [r for r in releases if not r["draft"]]
+    stable = sorted((r for r in published if not r["prerelease"]), key=lambda r: version_key(version_of(r)), reverse=True)
+    newest = version_key(version_of(stable[0])) if stable else None
+    dev = [r for r in published if r["prerelease"] and "-dev." in r["tag_name"]
+           and (newest is None or version_key(version_of(r)) > newest)]
+    return stable, sorted(stable + dev, key=lambda r: version_key(version_of(r)), reverse=True)
 
 
 def asset(release, pattern):
@@ -48,7 +66,13 @@ def download(url):
         return response.read()
 
 
-def maven(releases, root, fetch=download):
+def cached(fetch):
+    """{@code fetch}, downloading each URL once: both channels use the releases' zips."""
+    done = {}
+    return lambda url: done[url] if url in done else done.setdefault(url, fetch(url))
+
+
+def maven(releases, root, fetch):
     """Unpacks every release's Maven repository zip into root and writes maven-metadata.xml for each artifact.
 
     Returns the versions in the repository, the newest first."""
@@ -58,8 +82,7 @@ def maven(releases, root, fetch=download):
         found = asset(release, MAVEN_ASSET)
         if not found:
             continue
-        version = release["tag_name"].removeprefix("v")
-        released[version] = release["published_at"]
+        released[version_of(release)] = release["published_at"]
         with zipfile.ZipFile(io.BytesIO(fetch(found["browser_download_url"]))) as zip:
             for entry in zip.infolist():
                 name = entry.filename
@@ -85,8 +108,7 @@ def maven(releases, root, fetch=download):
             artifacts.setdefault("/".join(parts[:-1]), []).append(version)
     for path, versions in artifacts.items():
         versions.sort(key=version_key)
-        newest = versions[-1]
-        updated = released.get(newest)
+        updated = released.get(versions[-1])
         updated = datetime.fromisoformat(updated.replace("Z", "+00:00")) if updated else datetime.now()
         write_metadata(os.path.join(root, *path.split("/")), path, versions, updated.strftime("%Y%m%d%H%M%S"))
     return sorted(released, key=version_key, reverse=True)
@@ -95,13 +117,14 @@ def maven(releases, root, fetch=download):
 def write_metadata(directory, path, versions, updated):
     *group, artifact = path.split("/")
     listed = "".join(f"\n      <version>{v}</version>" for v in versions)
+    releases = [v for v in versions if "-" not in v]
+    release = f"\n    <release>{releases[-1]}</release>" if releases else ""
     text = f"""<?xml version="1.0" encoding="UTF-8"?>
 <metadata>
   <groupId>{".".join(group)}</groupId>
   <artifactId>{artifact}</artifactId>
   <versioning>
-    <latest>{versions[-1]}</latest>
-    <release>{versions[-1]}</release>
+    <latest>{versions[-1]}</latest>{release}
     <versions>{listed}
     </versions>
     <lastUpdated>{updated}</lastUpdated>
@@ -118,10 +141,11 @@ def write_metadata(directory, path, versions, updated):
 
 
 def plugin_repository(releases, since_build):
+    """An IntelliJ plugin repository with the first (newest) of {@code releases} that has the IntelliJ plugin."""
     plugins = ""
     release = next((r for r in releases if asset(r, INTELLIJ_ASSET)), None)
     if release:
-        version = release["tag_name"].removeprefix("v")
+        version = version_of(release)
         url = asset(release, INTELLIJ_ASSET)["browser_download_url"]
         plugins = f"""
     <plugin id="{PLUGIN_ID}" url="{html.escape(url)}" version="{html.escape(version)}">
@@ -134,8 +158,9 @@ def plugin_repository(releases, since_build):
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<plugins>{plugins}\n</plugins>\n'
 
 
-def index(base_url, versions):
-    newest = html.escape(versions[0]) if versions else "&lt;version&gt;"
+def index(base_url, release_versions, dev_versions):
+    release = html.escape(release_versions[0]) if release_versions else "&lt;version&gt;"
+    dev = html.escape(dev_versions[0]) if dev_versions else release
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -155,7 +180,7 @@ def index(base_url, versions):
 See <a href="https://github.com/GahahaWang/FastMultiversion">GitHub</a> for how to use it.</p>
 
 <h2>Gradle plugin</h2>
-<p>In <code>settings.gradle</code>:</p>
+<p>In <code>settings.gradle</code>, the newest release (now {release}):</p>
 <pre>pluginManagement {{
     repositories {{
         maven {{ url = '{base_url}maven' }}
@@ -165,13 +190,16 @@ See <a href="https://github.com/GahahaWang/FastMultiversion">GitHub</a> for how 
 }}
 
 plugins {{
-    id '{PLUGIN_ID}' version '{newest}'
+    id '{PLUGIN_ID}' version 'latest.release'
 }}</pre>
+<p>Or the dev channel, the newest pre-release or release, whichever is newer (now {dev}): the repository
+<code>{base_url}maven-dev</code> with <code>version 'latest.integration'</code>.</p>
 
 <h2>IntelliJ IDEA plugin</h2>
 <p>Install it from a <a href="https://github.com/GahahaWang/FastMultiversion/releases">release</a>. It then
-adds this repository to IntelliJ IDEA, which offers its updates. To add it by hand:
-<b>Settings → Plugins → ⚙ → Manage Plugin Repositories…</b>, then <code>{base_url}updatePlugins.xml</code></p>
+adds its channel's repository to IntelliJ IDEA, which offers its updates. To add one by hand:
+<b>Settings → Plugins → ⚙ → Manage Plugin Repositories…</b>, then <code>{base_url}updatePlugins.xml</code>, or
+<code>{base_url}updatePlugins-dev.xml</code> for the dev channel.</p>
 </body>
 </html>
 """
@@ -179,15 +207,18 @@ adds this repository to IntelliJ IDEA, which offers its updates. To add it by ha
 
 def main():
     build_gradle, output = sys.argv[1], sys.argv[2]
-    releases = releases_newest_first(json.load(sys.stdin))
+    stable, dev = channels(json.load(sys.stdin))
     with open(build_gradle, encoding="utf-8") as f:
         since_build = re.search(r"sinceBuild\s*=\s*'([^']+)'", f.read()).group(1)
     base_url = os.environ.get("PAGES_URL", "https://gahahawang.github.io/FastMultiversion/")
     os.makedirs(output, exist_ok=True)
-    versions = maven(releases, os.path.join(output, "maven"))
+    fetch = cached(download)
+    release_versions = maven(stable, os.path.join(output, "maven"), fetch)
+    dev_versions = maven(dev, os.path.join(output, "maven-dev"), fetch)
     files = {
-        "updatePlugins.xml": plugin_repository(releases, since_build),
-        "index.html": index(base_url, versions),
+        "updatePlugins.xml": plugin_repository(stable, since_build),
+        "updatePlugins-dev.xml": plugin_repository(dev, since_build),
+        "index.html": index(base_url, release_versions, dev_versions),
         ".nojekyll": "",
     }
     for name, text in files.items():

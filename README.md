@@ -43,6 +43,19 @@ plugins {
 Gradle looks for a new one once a day, or right away with `--refresh-dependencies`. To keep a build on one
 release, write its version instead, e.g. `version '1.0.0'`.
 
+For the dev channel, the newest pre-release (`x.y.z-dev.n`, from every change on the dev branch) or release,
+whichever is newer, use this repository and version instead:
+
+```groovy
+maven { url = 'https://gahahawang.github.io/FastMultiversion/maven-dev' }
+```
+
+```groovy
+id 'cc.gahaha.fastmultiversion' version 'latest.integration'
+```
+
+A release is newer than its pre-releases, so the dev channel moves to it once it is out.
+
 Without network access, unzip the release's `fastmultiversion-<version>-maven-repository.zip` into your mod,
 e.g. to `libs/fastmultiversion-repo`, and use `maven { url = file('libs/fastmultiversion-repo') }` instead.
 
@@ -54,6 +67,12 @@ Download `fastmultiversion-intellij-plugin-<version>.zip` from the newest releas
 From then on, IntelliJ IDEA offers its updates: the plugin adds its own plugin repository. To add it by hand,
 use **Settings → Plugins → ⚙ → Manage Plugin Repositories…** with
 `https://gahahawang.github.io/FastMultiversion/updatePlugins.xml`.
+
+A pre-release of the plugin (`fastmultiversion-intellij-plugin-x.y.z-dev.n.zip`, from the
+[pre-releases](https://github.com/GahahaWang/FastMultiversion/releases)) adds the dev channel instead,
+`https://gahahawang.github.io/FastMultiversion/updatePlugins-dev.xml`, and so gets the pre-releases too.
+IntelliJ IDEA counts x.y.z-dev.n as newer than x.y.z, so after a release it stays on the pre-release of the
+same code until the next pre-release.
 
 ### From source
 
@@ -89,8 +108,8 @@ With the IntelliJ plugin installed, choose **File → New → Project…**, then
 The wizard creates the project described below, with a Gradle wrapper and a small mod for each loader, and
 imports it. It looks up the newest Fabric Loader, and Fabric API and NeoForge for each Minecraft version; what
 it cannot find online is marked `UNKNOWN` in `gradle.properties`. The project uses the newest Gradle plugin
-from the FastMultiversion Maven repository (`latest.release`), or the IntelliJ plugin's version from
-`mavenLocal()` for an IntelliJ plugin built from source.
+of the IntelliJ plugin's channel: `maven` with `latest.release`, or for a pre-release `maven-dev` with
+`latest.integration`; for an IntelliJ plugin built from source, its version from `mavenLocal()`.
 
 To set up a project by hand instead, follow the rest of this section.
 

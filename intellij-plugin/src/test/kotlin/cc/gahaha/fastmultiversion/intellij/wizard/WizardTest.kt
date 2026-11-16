@@ -117,8 +117,14 @@ class WizardTest {
     }
 
     @Test
-    fun usesTheReleaseOfThisPluginOrMavenLocal() {
-        assertEquals(PluginRepository.Published("1.0.0"), PluginRepository.of("1.0.0"))
+    fun usesTheChannelOfThisPluginOrMavenLocal() {
+        val release = PluginRepository.of("1.0.0") as PluginRepository.Published
+        assertEquals("https://gahahawang.github.io/FastMultiversion/maven", release.url)
+        assertEquals("latest.release", release.requested)
+        // A pre-release: the dev channel, whose newest pre-release or release the project uses.
+        val dev = PluginRepository.of("1.1.0-dev.3") as PluginRepository.Published
+        assertEquals("https://gahahawang.github.io/FastMultiversion/maven-dev", dev.url)
+        assertEquals("latest.integration", dev.requested)
         assertEquals(PluginRepository.MavenLocal("1.0.0-SNAPSHOT"), PluginRepository.of("1.0.0-SNAPSHOT"))
     }
 

@@ -10,9 +10,15 @@ sealed interface PluginRepository {
     /** The version settings.gradle asks for. */
     val requested: String
 
-    /** FastMultiversion's Maven repository on GitHub Pages, which has every release: the project uses the newest. */
+    /**
+     * FastMultiversion's Maven repository on GitHub Pages, of the channel of [version]: for a release, the
+     * releases, of which the project uses the newest; for a pre-release (x.y.z-dev.n), the dev channel, of
+     * which it uses the newest pre-release or release.
+     */
     data class Published(override val version: String) : PluginRepository {
-        override val requested: String get() = "latest.release"
+        val dev: Boolean get() = "-dev." in version
+        val url: String get() = if (dev) DEV_URL else URL
+        override val requested: String get() = if (dev) "latest.integration" else "latest.release"
     }
 
     /** The local Maven repository: a build of FastMultiversion installed with publishToMavenLocal, a snapshot. */
@@ -22,8 +28,9 @@ sealed interface PluginRepository {
 
     companion object {
         const val URL = "https://gahahawang.github.io/FastMultiversion/maven"
+        const val DEV_URL = "https://gahahawang.github.io/FastMultiversion/maven-dev"
 
-        /** The release of [version], this IntelliJ plugin's own version; for a build from source (a snapshot), the local Maven repository. */
+        /** The channel of [version], this IntelliJ plugin's own version; for a build from source (a snapshot), the local Maven repository. */
         fun of(version: String): PluginRepository = if (version.endsWith("-SNAPSHOT")) MavenLocal(version) else Published(version)
     }
 }
@@ -67,7 +74,7 @@ object ProjectGenerator {
         val loom = settings.fabric || settings.common
         val pluginRepositories = buildList {
             when (plugin) {
-                is PluginRepository.Published -> add("maven { url = \"${PluginRepository.URL}\" }   // FastMultiversion")
+                is PluginRepository.Published -> add("maven { url = \"${plugin.url}\" }   // FastMultiversion")
                 is PluginRepository.MavenLocal -> add("mavenLocal()   // FastMultiversion, installed with its publishToMavenLocal")
             }
             if (loom) add("maven { url = \"https://maven.fabricmc.net/\" }")

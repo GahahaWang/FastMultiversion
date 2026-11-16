@@ -6,8 +6,9 @@ import org.junit.Test
 
 class PluginRepositoryRegistrarTest {
     @Test
-    fun usesTheReleasesRepositoryExceptForBuildsFromSource() {
-        assertEquals("https://gahahawang.github.io/FastMultiversion/updatePlugins.xml", PluginRepositoryRegistrar.repositoryFor("0.3.0"))
-        assertNull(PluginRepositoryRegistrar.repositoryFor("0.4.0-SNAPSHOT"))
+    fun usesTheChannelOfTheVersionExceptForBuildsFromSource() {
+        assertEquals("https://gahahawang.github.io/FastMultiversion/updatePlugins.xml", PluginRepositoryRegistrar.repositoryFor("1.0.0"))
+        assertEquals("https://gahahawang.github.io/FastMultiversion/updatePlugins-dev.xml", PluginRepositoryRegistrar.repositoryFor("1.1.0-dev.3"))
+        assertNull(PluginRepositoryRegistrar.repositoryFor("1.0.1-SNAPSHOT"))
     }
 }
