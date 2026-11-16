@@ -1,3 +1,14 @@
+## [1.0.0](https://github.com/GahahaWang/FastMultiversion/compare/v0.7.1...v1.0.0) (2026-11-16)
+
+### ⚠ BREAKING CHANGES
+
+* Replace @IfMc with @Mc.Is
+
+### ✨ New Features
+
+* List the wizard under Generators and choose Minecraft versions from Mojang's list ([cf71fd3](https://github.com/GahahaWang/FastMultiversion/commit/cf71fd3de1004d2e1e6bef56fe46e6ebca26fa42))
+* Replace @IfMc with @Mc.Is ([a785feb](https://github.com/GahahaWang/FastMultiversion/commit/a785feb794d2b40f9c49f3ee010a807a93787bdd))
+
 ## [0.7.1](https://github.com/GahahaWang/FastMultiversion/compare/v0.7.0...v0.7.1) (2026-11-15)
 
 ### 🐛 Bug Fixes
