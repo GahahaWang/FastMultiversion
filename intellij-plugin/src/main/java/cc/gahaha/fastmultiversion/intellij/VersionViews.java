@@ -29,11 +29,9 @@ import com.intellij.psi.util.CachedValueProvider;
 import com.intellij.psi.util.CachedValuesManager;
 import com.intellij.psi.util.PsiTreeUtil;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.jetbrains.annotations.Nullable;
 
@@ -108,10 +106,11 @@ final class VersionViews {
     }
 
     /**
-     * Single imports that the javac plugin drops in the build for {@code view}'s version: those that do not resolve
-     * there but name a class the database knows from other versions, and those of a class the database knows whose
-     * simple name an earlier such import, which resolves there, already took (the version has both classes, e.g. a
-     * library kept the old class next to the moved one: the first import wins).
+     * Single imports that do not resolve in {@code view} but name a class the database knows from other versions.
+     *
+     * <p>A later import of a name that an earlier import, which resolves there, already took (the version has both
+     * classes) stays: the IDE resolves the name through the first one anyway, as the build does, and navigating
+     * from the later import needs it.
      */
     private static List<TextRange> otherVersionImports(@Nullable PsiJavaFile view, MultiversionProject.State state) {
         PsiImportList imports = view == null ? null : view.getImportList();
@@ -119,19 +118,16 @@ final class VersionViews {
             return List.of();
         }
         List<TextRange> ranges = new ArrayList<>();
-        Set<String> imported = new HashSet<>();
         for (PsiImportStatementBase statement : imports.getAllImportStatements()) {
             PsiJavaCodeReferenceElement reference = statement.getImportReference();
             String name = reference == null ? null : reference.getQualifiedName();
-            if (name == null || statement.isOnDemand()) {
+            if (name == null || statement.isOnDemand() || statement.resolve() != null) {
                 continue;
             }
-            boolean isStatic = statement instanceof PsiImportStaticStatement;
-            String className = isStatic && name.lastIndexOf('.') > 0 ? name.substring(0, name.lastIndexOf('.')) : name;
-            if (OtherVersions.apiClass(state.db(), className) == null) {
-                continue;
+            if (statement instanceof PsiImportStaticStatement && name.lastIndexOf('.') > 0) {
+                name = name.substring(0, name.lastIndexOf('.'));
             }
-            if (statement.resolve() == null || (!isStatic && !imported.add(reference.getReferenceName()))) {
+            if (OtherVersions.apiClass(state.db(), name) != null) {
                 ranges.add(statement.getTextRange());
             }
         }

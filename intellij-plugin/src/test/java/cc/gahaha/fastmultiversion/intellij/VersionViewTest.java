@@ -454,6 +454,31 @@ public class VersionViewTest extends UsefulTestCase {
         assertEquals(0, gotoTargets().length);
     }
 
+    public void testNavigatesFromImportsOfClassesOnlyOtherVersionsHave() {
+        // mc.text.Line only exists in 26.1, which also has mc.text.pos.Line, imported first; mc.gone, its whole
+        // package, too. Their imports still go to 26.1's classes, and get the color of a class.
+        myFixture.configureByText("Lines.java", """
+                import mc.text.pos.Line;
+                import mc.text.Li<caret>ne;
+                import mc.gone.Thing;
+                class Lines { Line line; }
+                """);
+        PsiElement[] targets = gotoTargets();
+        assertEquals(1, targets.length);
+        assertTrue(path(targets[0]), path(targets[0]).endsWith("/mc-26.1/mc/text/Line.class"));
+
+        myFixture.getEditor().getCaretModel().moveToOffset(myFixture.getFile().getText().indexOf("Thing") + 2);
+        targets = gotoTargets();
+        assertEquals(1, targets.length);
+        assertTrue(path(targets[0]), path(targets[0]).endsWith("/mc-26.1/mc/gone/Thing.class"));
+
+        List<HighlightInfo> infos = myFixture.doHighlighting();
+        TextAttributesKey aClass = key(info(infos, "import mc.text.pos.Line", "Line"));
+        assertNotNull(aClass);
+        assertEquals(aClass, key(info(infos, "import mc.text.Line", "Line")));
+        assertEquals(aClass, key(info(infos, "import mc.gone.Thing", "Thing")));
+    }
+
     public void testDocumentsTheDeclarationOfTheBranchVersion() {
         myFixture.configureByText("Compat.java", COMPAT.replace("mc.setScreen(screen)", "mc.setScr<caret>een(screen)"));
         List<? extends DocumentationTarget> targets = IdeDocumentationTargetProvider.getInstance(myFixture.getProject())
@@ -668,7 +693,7 @@ public class VersionViewTest extends UsefulTestCase {
     private static synchronized Path libraries() throws IOException {
         if (libraries == null) {
             Path root = Files.createTempDirectory("multiversion-mc");
-            Path old = compile(root, "mc-26.1", Map.of(
+            Path old = compile(root, "mc-26.1", merged(Map.of(
                     "mc/Screen.java", "package mc; public class Screen {}",
                     "mc/Options.java", "package mc; public class Options { public boolean hideGui; }",
                     "mc/Minecraft.java", "package mc; public class Minecraft { public Screen screen; public Options options; "
@@ -679,7 +704,11 @@ public class VersionViewTest extends UsefulTestCase {
                     // 26.1 kept mc.util.Layer next to the moved mc.util.pos.Layer, as libraries do.
                     "mc/util/Layer.java", "package mc.util; public class Layer {}",
                     "mc/util/pos/Layer.java", "package mc.util.pos; public class Layer {}",
-                    "mc/Layers.java", "package mc; public class Layers { public static mc.util.pos.Layer current() { return null; } }"));
+                    "mc/Layers.java", "package mc; public class Layers { public static mc.util.pos.Layer current() { return null; } }"), Map.of(
+                    // 26.1 also has mc.text.Line next to mc.text.pos.Line, 26.2 only the latter; mc.gone is only in 26.1.
+                    "mc/text/Line.java", "package mc.text; public class Line {}",
+                    "mc/text/pos/Line.java", "package mc.text.pos; public class Line {}",
+                    "mc/gone/Thing.java", "package mc.gone; public class Thing {}")));
             Path current = compile(root, "mc-26.2", Map.of(
                     "mc/Screen.java", "package mc; public class Screen {}",
                     "mc/Gui.java", "package mc; public class Gui { public Screen screen() { return null; } "
@@ -690,13 +719,20 @@ public class VersionViewTest extends UsefulTestCase {
                     "mc/Data.java", "package mc; public class Data { public static mc.pos.Range range() { return null; } }",
                     "mc/util/Layer.java", "package mc.util; public class Layer {}",
                     "mc/util/pos/Layer.java", "package mc.util.pos; public class Layer {}",
-                    "mc/Layers.java", "package mc; public class Layers { public static mc.util.pos.Layer current() { return null; } }"));
+                    "mc/Layers.java", "package mc; public class Layers { public static mc.util.pos.Layer current() { return null; } }",
+                    "mc/text/pos/Line.java", "package mc.text.pos; public class Line {}"));
             database = ApiDbGenerator.generate(List.of(
                     new VersionJars(McVersion.parse("26.1"), List.of(old)),
                     new VersionJars(McVersion.parse("26.2"), List.of(current))));
             libraries = root;
         }
         return libraries;
+    }
+
+    private static Map<String, String> merged(Map<String, String> some, Map<String, String> more) {
+        Map<String, String> all = new java.util.HashMap<>(some);
+        all.putAll(more);
+        return all;
     }
 
     /** Compiles into {@code root/name} (the IDE's library root) and returns a jar of it (for the database). */

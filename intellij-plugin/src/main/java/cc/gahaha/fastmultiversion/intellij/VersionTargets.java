@@ -42,7 +42,7 @@ final class VersionTargets {
             // Active code. A name that the active version does not have but other versions do, such as an import
             // of a class that only older versions have: in the newest of those versions.
             if (reference.multiResolve(false).length == 0) {
-                OtherVersions.Found found = OtherVersions.find(reference, state.db(), state.active());
+                OtherVersions.Found found = OtherVersions.inOtherVersions(reference, state.db(), state.active());
                 return found == null ? List.of() : in(state, file, reference, MultiversionProject.State.newest(found.versions()));
             }
             // Otherwise only a call that the IDE finds ambiguous between twins for several versions.

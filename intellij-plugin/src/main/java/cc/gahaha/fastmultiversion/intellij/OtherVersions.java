@@ -110,6 +110,28 @@ final class OtherVersions {
     }
 
     /**
+     * For the name of a class import ({@code import a.b.C;}): the class the database knows by that name and the
+     * versions that have it, also where the active version lacks its package (which {@link #find} needs); otherwise
+     * {@code null}.
+     */
+    static @Nullable Found importedClass(PsiJavaCodeReferenceElement reference, ApiDatabase db) {
+        String name = reference.getParent() instanceof PsiImportStatement ? reference.getQualifiedName() : null;
+        return name == null ? null : apiClassFound(db, name);
+    }
+
+    /**
+     * What an unresolved {@code reference} in code that runs in the active version names in other versions, as
+     * {@link #find} or, for an import, {@link #importedClass}; {@code null} if no other version has it.
+     */
+    static @Nullable Found inOtherVersions(PsiJavaCodeReferenceElement reference, ApiDatabase db, int active) {
+        Found found = find(reference, db, active);
+        if (found == null) {
+            found = importedClass(reference, db);
+        }
+        return found == null || (found.versions() & ~(1L << active)) == 0 ? null : new Found(found.what(), found.versions() & ~(1L << active));
+    }
+
+    /**
      * The import that hides the class an unresolved {@code reference} names: the IDE resolves a name through the
      * first single import of it only, so an import of another version's class (one that moved to another
      * package) hides a later import of the same name that does resolve. {@code null} if there is none.

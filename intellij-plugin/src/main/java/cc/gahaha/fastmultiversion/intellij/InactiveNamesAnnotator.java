@@ -102,7 +102,7 @@ public final class InactiveNamesAnnotator implements Annotator {
                 if (reference.getReferenceNameElement() == null || reference.multiResolve(false).length != 0) {
                     return;
                 }
-                OtherVersions.Found found = OtherVersions.find(reference, state.db(), state.active());
+                OtherVersions.Found found = OtherVersions.inOtherVersions(reference, state.db(), state.active());
                 if (found != null && (guards.of(reference) & state.activeBit()) != 0) {
                     otherVersionNames.computeIfAbsent(MultiversionProject.State.newest(found.versions()), v -> new ArrayList<>())
                             .add(reference);
