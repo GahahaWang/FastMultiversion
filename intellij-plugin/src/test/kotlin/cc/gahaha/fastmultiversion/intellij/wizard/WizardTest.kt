@@ -31,6 +31,62 @@ class WizardTest {
     }
 
     @Test
+    fun listsTheMinecraftVersionsOfMojang() {
+        val manifest = """
+            {"latest": {"release": "26.3", "snapshot": "26.4-snapshot-2"}, "versions": [
+              {"id": "26.4-snapshot-2", "type": "snapshot"},
+              {"id": "26.3", "type": "release"},
+              {"id": "26.3-rc-1", "type": "snapshot"},
+              {"id": "26.3-pre-2", "type": "snapshot"},
+              {"id": "26.2.1", "type": "release"},
+              {"id": "26.2", "type": "release"},
+              {"id": "26.1.2", "type": "release"},
+              {"id": "26.1", "type": "release"},
+              {"id": "26.1-snapshot-1", "type": "snapshot"},
+              {"id": "25w46a", "type": "snapshot"},
+              {"id": "1.21.11", "type": "release"},
+              {"id": "b1.7.3", "type": "old_beta"}
+            ]}
+        """.trimIndent()
+        val versions = MinecraftVersions.parse(manifest)!!
+        // 26.1 and newer, newest first: 26.1-snapshot-1 is older than 26.1.
+        assertEquals(listOf("26.4-snapshot-2", "26.3", "26.3-rc-1", "26.3-pre-2", "26.2.1", "26.2", "26.1.2", "26.1"), versions.map { it.id })
+        assertEquals(listOf("26.4-snapshot-2", "26.3-rc-1", "26.3-pre-2"), versions.filter { it.snapshot }.map { it.id })
+        assertEquals(listOf("26.3", "26.2.1", "26.1.2"), MinecraftVersions.proposed(versions))
+        assertNull(MinecraftVersions.parse("not json"))
+        assertNull(MinecraftVersions.fetch { null })
+    }
+
+    @Test
+    fun choosesVersionsFromTheList() {
+        val choice = VersionChoice()
+        // Before Mojang's list is read (or without it): the versions the plugin knows, all ticked.
+        assertEquals(VersionLookup.DEFAULT_MINECRAFT_VERSIONS, choice.chosen())
+
+        val versions = listOf(
+            MinecraftVersion("26.4-snapshot-1", true), MinecraftVersion("26.3", false), MinecraftVersion("26.2.1", false),
+            MinecraftVersion("26.2", false), MinecraftVersion("26.1.2", false),
+        )
+        choice.loaded(versions)
+        assertEquals(listOf("26.3", "26.2.1", "26.2", "26.1.2"), choice.shown().map { it.id }) // no snapshots by default
+        assertEquals(listOf("26.1.2", "26.2.1", "26.3"), choice.chosen())
+
+        choice.snapshots = true
+        assertEquals("26.4-snapshot-1", choice.shown().first().id)
+        choice.tick("26.4-snapshot-1", true)
+        choice.tick("26.2.1", false)
+        assertEquals(listOf("26.1.2", "26.3", "26.4-snapshot-1"), choice.chosen())
+        choice.snapshots = false
+        assertEquals(listOf("26.1.2", "26.3"), choice.chosen()) // hidden snapshots are not chosen
+
+        // A choice made before the list arrives is kept.
+        val early = VersionChoice()
+        early.tick("26.1.2", false)
+        early.loaded(versions)
+        assertEquals(listOf("26.2", "26.3"), early.chosen())
+    }
+
+    @Test
     fun looksUpTheNewestVersions() {
         val responses = mapOf(
             VersionLookup.FABRIC_LOADER to """[{"version":"0.21.0-beta","stable":false},{"version":"0.20.9","stable":true}]""",
@@ -105,7 +161,7 @@ class WizardTest {
         assertTrue(build, build.contains("net.fabricmc.fabric-loom") && !build.contains("moddev"))
         val settings = dir.resolve("settings.gradle").readText()
         assertTrue(settings, settings.contains("maven { url = \"https://gahahawang.github.io/FastMultiversion/maven\" }"))
-        assertTrue(settings, settings.contains("id 'cc.gahaha.fastmultiversion' version '1.0.0'"))
+        assertTrue(settings, settings.contains("id 'cc.gahaha.fastmultiversion' version 'latest.release'"))
         assertTrue(settings, settings.contains("loaders 'fabric'"))
         val mod = dir.resolve("src/main/java/com/example/testmod/TestMod.java").readText()
         assertTrue(mod, mod.contains("LOGGER.info(\"Test Mod for Minecraft 26.2\");") && !mod.contains("Mc.is("))

@@ -23,7 +23,7 @@ if (Mc.is("[26.2,)")) {
 ### Gradle plugin
 
 Add the FastMultiversion Maven repository to the plugin repositories in `settings.gradle`, and apply the
-plugin with the newest [release](https://github.com/GahahaWang/FastMultiversion/releases)'s version:
+plugin:
 
 ```groovy
 pluginManagement {
@@ -35,11 +35,13 @@ pluginManagement {
 }
 
 plugins {
-    id 'cc.gahaha.fastmultiversion' version '<version>'
+    id 'cc.gahaha.fastmultiversion' version 'latest.release'
 }
 ```
 
-To update, change the version.
+`latest.release` is always the newest [release](https://github.com/GahahaWang/FastMultiversion/releases).
+Gradle looks for a new one once a day, or right away with `--refresh-dependencies`. To keep a build on one
+release, write its version instead, e.g. `version '1.0.0'`.
 
 Without network access, unzip the release's `fastmultiversion-<version>-maven-repository.zip` into your mod,
 e.g. to `libs/fastmultiversion-repo`, and use `maven { url = file('libs/fastmultiversion-repo') }` instead.
@@ -76,17 +78,19 @@ The plugin is then in `intellij-plugin/build/distributions/`.
 
 ### With the IntelliJ IDEA wizard
 
-With the IntelliJ plugin installed, choose **File → New → Project… → FastMultiversion** and enter:
+With the IntelliJ plugin installed, choose **File → New → Project…**, then **FastMultiversion** under
+**Generators**, and enter:
 
 - the mod ID, the mod name and the Java package;
-- the Minecraft versions, e.g. `26.1.2, 26.2, 26.3`;
+- the Minecraft versions: tick them in the list of every Minecraft version from 26.1 on, read from Mojang's
+  version list. **Show snapshots** adds snapshots, pre-releases and release candidates;
 - the loaders: Fabric, NeoForge or both.
 
 The wizard creates the project described below, with a Gradle wrapper and a small mod for each loader, and
 imports it. It looks up the newest Fabric Loader, and Fabric API and NeoForge for each Minecraft version; what
-it cannot find online is marked `UNKNOWN` in `gradle.properties`. The project uses the Gradle plugin of the
-IntelliJ plugin's version from the FastMultiversion Maven repository, or from `mavenLocal()` for an IntelliJ
-plugin built from source.
+it cannot find online is marked `UNKNOWN` in `gradle.properties`. The project uses the newest Gradle plugin
+from the FastMultiversion Maven repository (`latest.release`), or the IntelliJ plugin's version from
+`mavenLocal()` for an IntelliJ plugin built from source.
 
 To set up a project by hand instead, follow the rest of this section.
 
@@ -104,7 +108,7 @@ pluginManagement {
 }
 
 plugins {
-    id 'cc.gahaha.fastmultiversion' version '<version>'    // the newest release
+    id 'cc.gahaha.fastmultiversion' version 'latest.release'
 }
 
 rootProject.name = 'MyMod'

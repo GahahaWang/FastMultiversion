@@ -7,11 +7,18 @@ import java.nio.file.Path
 sealed interface PluginRepository {
     val version: String
 
-    /** FastMultiversion's Maven repository on GitHub Pages, which has every release. */
-    data class Published(override val version: String) : PluginRepository
+    /** The version settings.gradle asks for. */
+    val requested: String
 
-    /** The local Maven repository: a build of FastMultiversion installed with publishToMavenLocal. */
-    data class MavenLocal(override val version: String) : PluginRepository
+    /** FastMultiversion's Maven repository on GitHub Pages, which has every release: the project uses the newest. */
+    data class Published(override val version: String) : PluginRepository {
+        override val requested: String get() = "latest.release"
+    }
+
+    /** The local Maven repository: a build of FastMultiversion installed with publishToMavenLocal, a snapshot. */
+    data class MavenLocal(override val version: String) : PluginRepository {
+        override val requested: String get() = version
+    }
 
     companion object {
         const val URL = "https://gahahawang.github.io/FastMultiversion/maven"
@@ -93,7 +100,7 @@ object ProjectGenerator {
             "modName" to settings.modName,
             "modClass" to settings.modClass,
             "group" to settings.group,
-            "fastmultiversionVersion" to plugin.version,
+            "fastmultiversionVersion" to plugin.requested,
             "pluginRepositories" to pluginRepositories.joinToString("\n") { "        $it" },
             "loaderPlugins" to loaderPlugins.joinToString("\n") { "    $it" },
             "pluginVersions" to pluginVersions.joinToString("\n"),

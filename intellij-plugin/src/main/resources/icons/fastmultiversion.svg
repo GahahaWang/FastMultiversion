@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- FastMultiversion's generator icon: an original drawing of a grass block. -->
+  <path d="M8 1l7 3.5L8 8 1 4.5z" fill="#62A83A"/>
+  <path d="M1 4.5L8 8v7l-7-3.5z" fill="#8A5A33"/>
+  <path d="M8 8l7-3.5v7L8 15z" fill="#6B4426"/>
+  <path d="M1 4.5L8 8v2L1 6.5z" fill="#4F8F2C"/>
+  <path d="M8 8l7-3.5v2L8 10z" fill="#3F7524"/>
+  <path d="M2.5 6.75l1 .5v1l-1-.5z" fill="#4F8F2C"/>
+  <path d="M5.5 8.25l1 .5v1l-1-.5z" fill="#4F8F2C"/>
+  <path d="M10 9.5l1-.5v1l-1 .5z" fill="#3F7524"/>
+  <path d="M13 8l1-.5v1l-1 .5z" fill="#3F7524"/>
+  <path d="M3 10l1 .5v1l-1-.5z" fill="#A06D42"/>
+  <path d="M5.5 12.25l1 .5v1l-1-.5z" fill="#A06D42"/>
+  <path d="M10.5 12.25l1-.5v1l-1 .5z" fill="#573720"/>
+  <path d="M12.5 9.75l1-.5v1l-1 .5z" fill="#573720"/>
+</svg>

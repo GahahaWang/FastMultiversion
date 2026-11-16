@@ -13,7 +13,7 @@
       <li>resolves code that does not run in the active Minecraft version against the version it runs in:
           its errors, Go to Declaration, Quick Documentation and member completion use that version's
           Minecraft, not the active one's;</li>
-      <li>creates new mod projects: File → New → Project → FastMultiversion.</li>
+      <li>creates new mod projects: File → New → Project → Generators → FastMultiversion.</li>
     </ul>
     Needs the multiversion Gradle plugin, which writes build/multiversion/project.properties and the API
     database (task <code>generateApiDatabase</code>, which the plugin runs after each Gradle sync).
@@ -23,8 +23,8 @@
     <depends>com.intellij.gradle</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <!-- File → New → Project → FastMultiversion. -->
-        <newProjectWizard.generator implementation="cc.gahaha.fastmultiversion.intellij.wizard.FastMultiversionWizard"/>
+        <!-- File → New → Project → Generators → FastMultiversion. -->
+        <moduleBuilder builderClass="cc.gahaha.fastmultiversion.intellij.wizard.FastMultiversionModuleBuilder"/>
         <notificationGroup id="FastMultiversion" displayType="BALLOON"/>
         <!-- Updates: the plugin's own repository on GitHub Pages. -->
         <postStartupActivity implementation="cc.gahaha.fastmultiversion.intellij.update.PluginRepositoryRegistrar"/>

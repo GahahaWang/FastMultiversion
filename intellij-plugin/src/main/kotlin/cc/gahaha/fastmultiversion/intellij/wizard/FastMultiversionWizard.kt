@@ -1,6 +1,5 @@
 package cc.gahaha.fastmultiversion.intellij.wizard
 
-import com.intellij.icons.AllIcons
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.ide.util.projectWizard.WizardContext
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
@@ -14,12 +13,17 @@ import com.intellij.ide.wizard.RootNewProjectWizardStep
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.extensions.PluginId
+import com.intellij.openapi.util.IconLoader
+import com.intellij.ui.CheckBoxList
+import com.intellij.ui.components.JBScrollPane
+import com.intellij.ui.dsl.builder.RowLayout
+import com.intellij.util.ui.JBUI
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.ui.dsl.builder.COLUMNS_LARGE
 import com.intellij.ui.dsl.builder.COLUMNS_MEDIUM
 import com.intellij.ui.dsl.builder.Panel
 import com.intellij.ui.dsl.builder.bindSelected
@@ -35,7 +39,7 @@ import org.jetbrains.plugins.gradle.service.project.open.linkAndRefreshGradlePro
 class FastMultiversionWizard : GeneratorNewProjectWizard {
     override val id: String = "cc.gahaha.fastmultiversion"
     override val name: String = "FastMultiversion"
-    override val icon: Icon = AllIcons.Nodes.Module
+    override val icon: Icon = IconLoader.getIcon("/icons/fastmultiversion.svg", FastMultiversionWizard::class.java)
     override val description: String =
         "A Minecraft mod built for several Minecraft versions and loaders from one source tree, with FastMultiversion."
 
@@ -51,7 +55,9 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
     private val modIdProperty = propertyGraph.lazyProperty { ModSettings.suggestModId(baseData?.name ?: "") }
     private val modNameProperty = propertyGraph.lazyProperty { baseData?.name ?: "My Mod" }
     private val groupProperty = propertyGraph.lazyProperty { "com.example." + modIdProperty.get() }
-    private val versionsProperty = propertyGraph.property(VersionLookup.DEFAULT_MINECRAFT_VERSIONS.joinToString(", "))
+    private val versionChoice = VersionChoice()
+    private val versionList = CheckBoxList<String>()
+    private val snapshotsProperty = propertyGraph.property(false)
     private val fabricProperty = propertyGraph.property(true)
     private val neoforgeProperty = propertyGraph.property(true)
 
@@ -61,6 +67,36 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             modNameProperty.dependsOn(base.nameProperty, deleteWhenModified = true) { base.name }
         }
         groupProperty.dependsOn(modIdProperty, deleteWhenModified = true) { "com.example." + modIdProperty.get() }
+        versionList.setCheckBoxListListener { index, ticked -> versionList.getItemAt(index)?.let { versionChoice.tick(it, ticked) } }
+        snapshotsProperty.afterChange { snapshots ->
+            versionChoice.snapshots = snapshots
+            showVersions()
+        }
+        showVersions()
+    }
+
+    /** Fills the list with the versions [versionChoice] shows, ticked as chosen. */
+    private fun showVersions() {
+        versionList.clear()
+        for (version in versionChoice.shown()) {
+            versionList.addItem(version.id, version.id, versionChoice.isTicked(version.id))
+        }
+    }
+
+    /** Reads Mojang's version list in the background, then shows it; [status] gets what the list is. */
+    private fun loadVersions(status: (String) -> Unit) {
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val versions = MinecraftVersions.fetch(Fetcher(::readText))
+            ApplicationManager.getApplication().invokeLater({
+                if (versions != null && versions.isNotEmpty()) {
+                    versionChoice.loaded(versions)
+                    showVersions()
+                    status("Minecraft 26.1 and newer, from Mojang's version list")
+                } else {
+                    status("Mojang's version list could not be read: the versions this plugin knows")
+                }
+            }, ModalityState.any())
+        }
     }
 
     override fun setupUI(builder: Panel) {
@@ -79,9 +115,19 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
                 .validationOnApply { field -> ModSettings.checkGroup(field.text)?.let { error(it) } }
         }
         builder.row("Minecraft versions:") {
-            textField().bindText(versionsProperty).columns(COLUMNS_LARGE)
-                .comment("Comma-separated; Minecraft 26.1 and newer")
-                .validationOnApply { field -> ModSettings.parseVersions(field.text).exceptionOrNull()?.let { error(it.message ?: "") } }
+            val list = cell(JBScrollPane(versionList))
+                .applyToComponent { preferredSize = JBUI.size(280, 150) }
+                .comment("Loading the versions from Mojang…")
+                .validationOnApply {
+                    val chosen = versionChoice.chosen()
+                    if (chosen.isEmpty()) error("Choose at least one Minecraft version")
+                    else ModSettings.parseVersions(chosen.joinToString(", ")).exceptionOrNull()?.let { error(it.message ?: "") }
+                }
+            loadVersions { status -> list.comment?.text = status }
+        }.layout(RowLayout.LABEL_ALIGNED)
+        builder.row("") {
+            checkBox("Show snapshots").bindSelected(snapshotsProperty)
+                .comment("Snapshots, pre-releases and release candidates")
         }
         builder.row("Loaders:") {
             checkBox("Fabric").bindSelected(fabricProperty)
@@ -98,7 +144,7 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             modId = modIdProperty.get(),
             modName = modNameProperty.get().trim(),
             group = groupProperty.get(),
-            versions = ModSettings.parseVersions(versionsProperty.get()).getOrThrow(),
+            versions = ModSettings.parseVersions(versionChoice.chosen().joinToString(", ")).getOrThrow(),
             loaders = ModSettings.LOADERS.filter { (it == "fabric" && fabricProperty.get()) || (it == "neoforge" && neoforgeProperty.get()) },
         )
         val pluginVersion = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.version ?: "0.0.0-SNAPSHOT"
