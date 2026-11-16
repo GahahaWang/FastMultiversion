@@ -482,6 +482,22 @@ public class VersionViewTest extends UsefulTestCase {
         assertEquals(Color.RED, setScreen.getTextAttributes(null, theme).getForegroundColor());
     }
 
+    public void testColorsNamesOfOtherVersionsInActiveCode() {
+        // mc.Options only exists in 26.1 (the active version is 26.2), mc.Minecraft in both: both imports get the
+        // color the IDE gives a class.
+        myFixture.configureByText("Imports.java", """
+                import mc.Minecraft;
+                import mc.Options;
+                class Imports {
+                    Minecraft mc;
+                }
+                """);
+        List<HighlightInfo> infos = myFixture.doHighlighting();
+        TextAttributesKey minecraft = key(info(infos, "import mc.Minecraft", "Minecraft"));
+        assertNotNull(minecraft);
+        assertEquals(minecraft, key(info(infos, "import mc.Options", "Options")));
+    }
+
     public void testReloadingTheSetupRebuildsTheViews() {
         myFixture.configureByText("Compat.java", COMPAT);
         MultiversionProject setup = MultiversionProject.getInstance(myFixture.getProject());

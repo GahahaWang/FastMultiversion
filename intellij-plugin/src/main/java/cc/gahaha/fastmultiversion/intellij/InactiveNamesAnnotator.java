@@ -12,6 +12,7 @@ import com.intellij.openapi.editor.colors.TextAttributesKey;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.TextRange;
+import com.intellij.psi.JavaRecursiveElementWalkingVisitor;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiIdentifier;
 import com.intellij.psi.PsiJavaCodeReferenceElement;
@@ -22,16 +23,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Colors the names in code that does not run in the active version as the color scheme colors them: a method
- * call, a static field, an interface, ... The IDE colors a name by what it resolves to in the active version, so
- * a name that only other versions have, such as {@code Minecraft.setScreen} of 26.1.2, would stay plain. For
- * such names, the IDE's own name highlighting runs on the {@link VersionViews view} of the newest version the
- * code runs in, where they resolve.
+ * Colors the names that only other versions have as the color scheme colors them: a method call, a static field,
+ * an interface, ... The IDE colors a name by what it resolves to in the active version, so such a name, e.g.
+ * {@code Minecraft.setScreen} of 26.1.2, would stay plain. For a name in code that does not run in the active
+ * version, the IDE's own name highlighting runs on the {@link VersionViews view} of the newest version the code
+ * runs in; for one in code that does (e.g. an import of a class only older versions have), on the view of the
+ * newest version that has it.
  *
  * <p>A name gets the key of the color scheme that the IDE picks for it (e.g. {@code INSTANCE_FIELD_ATTRIBUTES}),
  * not colors: the editor looks the key up in its color scheme, so the colors are those of the scheme in use,
@@ -74,38 +77,87 @@ public final class InactiveNamesAnnotator implements Annotator {
 
     private static Map<TextRange, TextAttributesKey> find(PsiJavaFile file, MultiversionProject.State state) {
         Guards guards = new Guards(state.db());
-        Set<Integer> versions = new TreeSet<>();
-        guards.inactiveVersions(file, guards.all(), state.activeBit(), versions);
         Map<TextRange, TextAttributesKey> keys = new HashMap<>();
         PsiJavaFile original = file.getOriginalFile() instanceof PsiJavaFile o ? o : file;
+
+        // Code that does not run in the active version: in the newest version it runs in.
+        Set<Integer> versions = new TreeSet<>();
+        guards.inactiveVersions(file, guards.all(), state.activeBit(), versions);
         for (int version : versions) {
             PsiJavaFile view = VersionViews.of(state, original, version);
-            if (view == null) {
-                continue;
-            }
-            List<PsiElement> elements = new ArrayList<>();
-            guards.inactiveElements(view, guards.all(), version, state.activeBit(), elements);
-            HighlightInfoHolder infos = new HighlightInfoHolder(view);
-            try {
-                HighlightNamesUtil.highlight(view, infos, visitor -> elements.forEach(element -> element.accept(visitor)));
-            } catch (ProcessCanceledException e) {
-                throw e;
-            } catch (RuntimeException e) {
-                // The IDE's name highlighting is not made for files outside the editor; the names stay plain.
-                LOG.warn("cannot color the names of " + file.getName() + " in Minecraft " + state.name(version), e);
-                continue;
-            }
-            for (int i = 0; i < infos.size(); i++) {
-                HighlightInfo info = infos.get(i);
-                TextRange range = TextRange.create(info.getStartOffset(), info.getEndOffset());
-                TextAttributesKey key = key(info);
-                // A view has the file's text, so the same offsets; names that resolve in the file are colored by the IDE.
-                if (key != null && !keys.containsKey(range) && isUnresolvedName(file, range)) {
-                    keys.put(range, key);
-                }
+            if (view != null) {
+                List<PsiElement> elements = new ArrayList<>();
+                guards.inactiveElements(view, guards.all(), version, state.activeBit(), elements);
+                color(file, view, elements, state.name(version), keys);
             }
         }
+
+        // Names in code that runs in the active version but that only other versions have, such as an import of a
+        // class that only older versions have: in the newest of those, where Go to Declaration goes, too.
+        Map<Integer, List<PsiJavaCodeReferenceElement>> otherVersionNames = new TreeMap<>();
+        file.accept(new JavaRecursiveElementWalkingVisitor() {
+            @Override
+            public void visitReferenceElement(@NotNull PsiJavaCodeReferenceElement reference) {
+                super.visitReferenceElement(reference);
+                if (reference.getReferenceNameElement() == null || reference.multiResolve(false).length != 0) {
+                    return;
+                }
+                OtherVersions.Found found = OtherVersions.find(reference, state.db(), state.active());
+                if (found != null && (guards.of(reference) & state.activeBit()) != 0) {
+                    otherVersionNames.computeIfAbsent(MultiversionProject.State.newest(found.versions()), v -> new ArrayList<>())
+                            .add(reference);
+                }
+            }
+        });
+        otherVersionNames.forEach((version, references) -> {
+            PsiJavaFile view = VersionViews.of(state, original, version);
+            if (view != null) {
+                List<PsiElement> elements = new ArrayList<>();
+                for (PsiJavaCodeReferenceElement reference : references) {
+                    PsiJavaCodeReferenceElement inView = VersionViews.counterpart(reference, view);
+                    if (inView != null) {
+                        addWithChildren(inView, elements);
+                    }
+                }
+                color(file, view, elements, state.name(version), keys);
+            }
+        });
         return keys;
+    }
+
+    /**
+     * Runs the IDE's name highlighting on {@code elements} of {@code view}, and keeps the keys it gives the names
+     * that do not resolve in {@code file}.
+     */
+    private static void color(PsiJavaFile file, PsiJavaFile view, List<PsiElement> elements, String version,
+                              Map<TextRange, TextAttributesKey> keys) {
+        HighlightInfoHolder infos = new HighlightInfoHolder(view);
+        try {
+            HighlightNamesUtil.highlight(view, infos, visitor -> elements.forEach(element -> element.accept(visitor)));
+        } catch (ProcessCanceledException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            // The IDE's name highlighting is not made for files outside the editor; the names stay plain.
+            LOG.warn("cannot color the names of " + file.getName() + " in Minecraft " + version, e);
+            return;
+        }
+        for (int i = 0; i < infos.size(); i++) {
+            HighlightInfo info = infos.get(i);
+            TextRange range = TextRange.create(info.getStartOffset(), info.getEndOffset());
+            TextAttributesKey key = key(info);
+            // A view has the file's text, so the same offsets; names that resolve in the file are colored by the IDE.
+            if (key != null && !keys.containsKey(range) && isUnresolvedName(file, range)) {
+                keys.put(range, key);
+            }
+        }
+    }
+
+    /** Adds {@code element} after its descendants, children first, as the IDE visits them. */
+    private static void addWithChildren(PsiElement element, List<PsiElement> elements) {
+        for (PsiElement child = element.getFirstChild(); child != null; child = child.getNextSibling()) {
+            addWithChildren(child, elements);
+        }
+        elements.add(element);
     }
 
     /**
