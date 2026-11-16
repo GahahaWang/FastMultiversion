@@ -78,7 +78,6 @@ class RangeCheckTest {
 
     private static final String GUARDED = """
             package mod;
-            import cc.gahaha.fastmultiversion.IfMc;
             import cc.gahaha.fastmultiversion.Mc;
             import mc.*;
             public class Guarded {
@@ -103,7 +102,7 @@ class RangeCheckTest {
                 static String annotated() {
                     return Mc.is("[26.2,)") ? newOnly() : "old-annotated";
                 }
-                @IfMc("[26.2,)")
+                @Mc.Is("[26.2,)")
                 static String newOnly() { return Registry.of("x", "y"); }
                 static void damage(Registry registry) {
                     if (Mc.is("[26.2,)")) {
@@ -113,8 +112,8 @@ class RangeCheckTest {
                     }
                 }
                 static class MyScreen extends Screen {
-                    @IfMc("[26.1,26.2)") @Override public void render(int x) {}
-                    @IfMc("[26.2,)") @Override public void render(long x) {}
+                    @Mc.Is("[26.1,26.2)") @Override public void render(int x) {}
+                    @Mc.Is("[26.2,)") @Override public void render(long x) {}
                 }
             }
             """;
@@ -149,7 +148,7 @@ class RangeCheckTest {
         assertEquals(4, errors.lines().filter(l -> l.startsWith("line ")).count(), errors);
         assertTrue(errors.contains("line 4: [multiversion] 'Registry.of(String, String)' only exists in [26.2,), "
                 + "but this code runs in [26.1,). Use it inside if (Mc.is(\"[26.2,)\")) or in a declaration with "
-                + "@IfMc(\"[26.2,)\")."), errors);
+                + "@Mc.Is(\"[26.2,)\")."), errors);
         assertTrue(errors.contains("line 5: [multiversion] 'NewThing.name()' only exists in [26.2,)"), errors);
         assertTrue(errors.contains("line 6: [multiversion] 'Registry.hurt(Consumer<Registry>)' exists in every "
                 + "version this code runs in, but only has this form"), errors);

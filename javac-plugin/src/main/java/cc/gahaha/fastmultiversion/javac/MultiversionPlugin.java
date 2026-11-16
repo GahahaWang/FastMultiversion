@@ -22,7 +22,7 @@ import javax.tools.Diagnostic;
  * Right after each file is parsed, and before javac resolves any name, the plugin removes:
  * <ul>
  *   <li>the branches of {@code Mc.is("range")} conditions that cannot run on the target;</li>
- *   <li>declarations whose {@code @IfMc("range")} excludes the target;</li>
+ *   <li>declarations whose {@code @Mc.Is("range")} excludes the target;</li>
  *   <li>single imports that nothing uses anymore, and wildcard imports of packages the target lacks.</li>
  * </ul>
  * javac then compiles an ordinary program for that version against that version's real jars.

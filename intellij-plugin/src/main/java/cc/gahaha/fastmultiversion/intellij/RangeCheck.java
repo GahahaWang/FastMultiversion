@@ -119,8 +119,8 @@ final class RangeCheck {
                 reporter.report(method.getNameIdentifier(), "'" + (self == null ? "" : self.getName() + ".") + method.getName()
                                 + "' overrides " + describe(overridden) + ", which only exists like this in " + usable
                                 + ", but this method exists in " + db.range(guard) + ". Elsewhere it would override nothing "
-                                + "and never be called. Give it @IfMc(\"" + usable + "\").",
-                        ProblemHighlightType.GENERIC_ERROR, new AddIfMcFix(usable));
+                                + "and never be called. Give it @Mc.Is(\"" + usable + "\").",
+                        ProblemHighlightType.GENERIC_ERROR, new AddMcIsFix(usable));
                 return;
             }
         }
@@ -228,7 +228,7 @@ final class RangeCheck {
     }
 
     /**
-     * Reports a use of a declaration of the mod that only the versions {@code present} keep ({@code @IfMc}),
+     * Reports a use of a declaration of the mod that only the versions {@code present} keep ({@code @Mc.Is}),
      * from code that runs in {@code guard}.
      */
     void reportDeclaration(PsiElement at, String what, long present, long guard) {
@@ -255,11 +255,11 @@ final class RangeCheck {
         if (SurroundWithMcIsFix.statementToWrap(at) != null) {
             fixes.add(new SurroundWithMcIsFix(usable));
         }
-        if (AddIfMcFix.target(at) != null) {
-            fixes.add(new AddIfMcFix(usable));
+        if (AddMcIsFix.target(at) != null) {
+            fixes.add(new AddMcIsFix(usable));
         }
         reporter.report(at, problem + ", but this code runs in " + db.range(guard) + ". Use it inside "
-                        + "if (Mc.is(\"" + usable + "\")) or in a declaration with @IfMc(\"" + usable + "\").",
+                        + "if (Mc.is(\"" + usable + "\")) or in a declaration with @Mc.Is(\"" + usable + "\").",
                 ProblemHighlightType.GENERIC_ERROR, fixes.toArray(LocalQuickFix[]::new));
         return false;
     }

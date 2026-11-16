@@ -18,7 +18,7 @@ import java.util.Map;
 
 /**
  * The jars packed into this plugin: the javac plugin with its dependencies (for the processor path) and the
- * annotations ({@code Mc}, {@code @IfMc}) for the mod's compile classpath. They are unpacked once into the
+ * annotations ({@code Mc}, {@code @Mc.Is}) for the mod's compile classpath. They are unpacked once into the
  * Gradle user home, in a directory named after their content, so a file is never overwritten while a
  * compiler daemon may have it open.
  */

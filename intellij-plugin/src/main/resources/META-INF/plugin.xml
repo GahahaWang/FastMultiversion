@@ -6,7 +6,7 @@
     <vendor>gahaha</vendor>
     <description><![CDATA[
     Support for Minecraft mods built for several Minecraft versions from one source tree with
-    <code>Mc.is("range")</code> and <code>@IfMc("range")</code>:
+    <code>Mc.is("range")</code> and <code>@Mc.Is("range")</code>:
     <ul>
       <li>reports, as you type, Minecraft API used in code that also runs in versions without it,
           with quick fixes to guard it;</li>

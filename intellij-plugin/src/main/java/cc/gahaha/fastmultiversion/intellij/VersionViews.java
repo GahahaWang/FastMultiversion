@@ -71,7 +71,7 @@ final class VersionViews {
         // As javac does for the version, drop what the version does not have, blanked out so that offsets stay
         // the same: imports of classes that only other versions have (the IDE resolves a name through the first
         // import of it, so they would hide this version's import of the same name, e.g. of a class that moved
-        // to another package), and declarations whose @IfMc excludes the version (else e.g. a method declared
+        // to another package), and declarations whose @Mc.Is excludes the version (else e.g. a method declared
         // once per version would be defined twice).
         List<TextRange> otherVersions = new ArrayList<>(otherVersionImports(view, state));
         if (view != null) {

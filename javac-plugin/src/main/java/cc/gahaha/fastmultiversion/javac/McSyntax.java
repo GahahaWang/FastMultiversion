@@ -12,23 +12,25 @@ import com.sun.tools.javac.tree.TreeInfo;
 import com.sun.tools.javac.util.Name;
 
 /**
- * Recognizes {@code Mc}, {@code Mc.is} and {@code @IfMc} in a parse tree. Names are not resolved yet,
+ * Recognizes {@code Mc}, {@code Mc.is} and {@code @Mc.Is} in a parse tree. Names are not resolved yet,
  * so a simple name counts only if the file's imports (or its package) make it refer to our class.
  */
 final class McSyntax {
     static final String PACKAGE = "cc.gahaha.fastmultiversion";
     static final String MC = PACKAGE + ".Mc";
-    static final String IF_MC = PACKAGE + ".IfMc";
+    /** The annotation {@code @Mc.Is}, nested in {@code Mc}. */
+    static final String MC_IS = MC + ".Is";
 
     private final boolean mcBySimpleName;
-    private final boolean ifMcBySimpleName;
+    private final boolean isAnnotationBySimpleName;
     private final boolean isByStaticImport;
 
     McSyntax(JCCompilationUnit unit) {
         boolean mcImported = false;
         boolean otherMc = false;
-        boolean ifMcImported = false;
-        boolean otherIfMc = false;
+        boolean isImported = false;
+        boolean otherIs = false;
+        boolean mcMembers = false;
         boolean wholePackage = unit.getPackageName() != null && unit.getPackageName().toString().equals(PACKAGE);
         boolean staticIs = false;
         for (JCTree def : unit.defs) {
@@ -37,6 +39,12 @@ final class McSyntax {
             }
             String full = TreeInfo.fullName(imp.qualid).toString();
             String simple = imp.qualid.name.toString();
+            // The annotation by its simple name: imported itself, or with Mc's members (static or not).
+            mcMembers |= full.equals(MC + ".*");
+            if (simple.equals("Is")) {
+                isImported |= full.equals(MC_IS);
+                otherIs |= !full.equals(MC_IS);
+            }
             if (imp.isStatic()) {
                 staticIs |= full.equals(MC + ".is") || full.equals(MC + ".*");
             } else if (full.equals(PACKAGE + ".*")) {
@@ -44,13 +52,10 @@ final class McSyntax {
             } else if (simple.equals("Mc")) {
                 mcImported |= full.equals(MC);
                 otherMc |= !full.equals(MC);
-            } else if (simple.equals("IfMc")) {
-                ifMcImported |= full.equals(IF_MC);
-                otherIfMc |= !full.equals(IF_MC);
             }
         }
         this.mcBySimpleName = mcImported || (wholePackage && !otherMc);
-        this.ifMcBySimpleName = ifMcImported || (wholePackage && !otherIfMc);
+        this.isAnnotationBySimpleName = isImported || (mcMembers && !otherIs);
         this.isByStaticImport = staticIs;
     }
 
@@ -74,8 +79,13 @@ final class McSyntax {
         return call.meth instanceof JCIdent ident && ident.name.contentEquals("is") && isByStaticImport && !shadowed;
     }
 
-    boolean isIfMc(JCAnnotation annotation) {
-        return names((JCExpression) annotation.annotationType, "IfMc", ifMcBySimpleName, IF_MC);
+    /** Whether {@code annotation} is {@code @Mc.Is}, or {@code @Is} through an import of it. */
+    boolean isMcIsAnnotation(JCAnnotation annotation) {
+        JCTree type = annotation.annotationType;
+        if (type instanceof JCFieldAccess select) {
+            return select.name.contentEquals("Is") && isMc(select.selected);
+        }
+        return type instanceof JCIdent ident && ident.name.contentEquals("Is") && isAnnotationBySimpleName;
     }
 
     private static boolean names(JCExpression expr, String simple, boolean bySimpleName, String qualified) {

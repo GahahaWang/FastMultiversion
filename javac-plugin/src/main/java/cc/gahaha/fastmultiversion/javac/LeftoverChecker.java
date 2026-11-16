@@ -4,10 +4,12 @@ import com.sun.source.tree.CompilationUnitTree;
 import com.sun.tools.javac.code.Kinds.Kind;
 import com.sun.tools.javac.code.Symbol;
 import com.sun.tools.javac.tree.JCTree;
+import com.sun.tools.javac.tree.JCTree.JCAnnotation;
 import com.sun.tools.javac.tree.JCTree.JCFieldAccess;
 import com.sun.tools.javac.tree.JCTree.JCIdent;
 import com.sun.tools.javac.tree.JCTree.JCMemberReference;
 import com.sun.tools.javac.tree.JCTree.JCNewClass;
+import com.sun.tools.javac.tree.TreeInfo;
 import com.sun.tools.javac.tree.TreeScanner;
 import com.sun.tools.javac.util.Name;
 import java.util.List;
@@ -17,9 +19,10 @@ import java.util.Map;
  * Runs after attribution, on the code that is kept. Reports
  * <ul>
  *   <li>any remaining use of {@code Mc}: every valid {@code Mc.is} call was replaced before attribution,
- *       so anything left would call the throwing stub at runtime;</li>
+ *       so anything left would call the throwing stub at runtime (an {@code @Mc.Is} annotation is fine:
+ *       it is only retained in the source);</li>
  *   <li>a hint next to javac's "cannot find symbol" when the name belongs to a declaration that
- *       {@code @IfMc} removed from this build.</li>
+ *       {@code @Mc.Is} removed from this build.</li>
  * </ul>
  */
 final class LeftoverChecker extends TreeScanner {
@@ -52,6 +55,15 @@ final class LeftoverChecker extends TreeScanner {
     }
 
     @Override
+    public void visitAnnotation(JCAnnotation tree) {
+        // @Mc.Is of a kept declaration: retained in the source only, so nothing of it reaches the bytecode.
+        Symbol type = TreeInfo.symbol(tree.annotationType);
+        if (type == null || !type.getQualifiedName().contentEquals(McSyntax.MC_IS)) {
+            super.visitAnnotation(tree);
+        }
+    }
+
+    @Override
     public void visitNewClass(JCNewClass tree) {
         if (isMc(tree.constructor)) {
             check(tree.constructor, null, tree);
@@ -67,7 +79,7 @@ final class LeftoverChecker extends TreeScanner {
             for (String description : removed.get(name.toString())) {
                 host.note(at, unit, description + ", so it is not part of the Minecraft " + host.rawTarget()
                         + " build. Use it only inside a matching Mc.is(...) branch or a declaration with a "
-                        + "matching @IfMc.");
+                        + "matching @Mc.Is.");
             }
         }
     }

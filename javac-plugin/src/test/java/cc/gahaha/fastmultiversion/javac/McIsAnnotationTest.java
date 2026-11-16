@@ -11,27 +11,27 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-class IfMcTest {
+class McIsAnnotationTest {
     @TempDir
     Path temp;
 
     private static final String WIDGET = """
             package t;
-            import cc.gahaha.fastmultiversion.IfMc;
+            import cc.gahaha.fastmultiversion.Mc;
             public class Widget {
                 public static class OldContext {}
                 public static class NewContext {}
 
-                @IfMc("[26.1,26.2)") public static final String OLD_FIELD = "OLD_FIELD_VALUE";
-                @IfMc("[26.2,)") public static final String NEW_FIELD = "NEW_FIELD_VALUE";
+                @Mc.Is("[26.1,26.2)") public static final String OLD_FIELD = "OLD_FIELD_VALUE";
+                @Mc.Is("[26.2,)") public static final String NEW_FIELD = "NEW_FIELD_VALUE";
 
                 public Widget() {}
-                @IfMc("[26.1,26.2)") public Widget(OldContext context) {}
+                @Mc.Is("[26.1,26.2)") public Widget(OldContext context) {}
 
-                @IfMc("[26.1,26.2)") public String render(OldContext context) { return "old"; }
-                @IfMc("[26.2,)") public String render(NewContext context) { return "new"; }
+                @Mc.Is("[26.1,26.2)") public String render(OldContext context) { return "old"; }
+                @Mc.Is("[26.2,)") public String render(NewContext context) { return "new"; }
 
-                @IfMc("[26.1,26.2)") public static class OldHelper {}
+                @Mc.Is("[26.1,26.2)") public static class OldHelper {}
             }
             """;
 
@@ -70,15 +70,59 @@ class IfMcTest {
         return Arrays.stream(type.getDeclaredFields()).map(f -> f.getName()).sorted().toList();
     }
 
+    private static List<String> methodNames(Class<?> type) {
+        return Arrays.stream(type.getDeclaredMethods()).map(Method::getName).sorted().toList();
+    }
+
+    @Test
+    void recognizesTheAnnotationWrittenEveryWay() throws Exception {
+        // Fully qualified, imported itself, and imported with Mc's members: each is @Mc.Is.
+        var result = TestCompiler.target(temp, "26.2").source("""
+                package t;
+                import cc.gahaha.fastmultiversion.Mc.Is;
+                public class Forms {
+                    @cc.gahaha.fastmultiversion.Mc.Is("[26.1,26.2)") public static String qualified() { return "old"; }
+                    @Is("[26.1,26.2)") public static String imported() { return "old"; }
+                    public static String kept() { return "new"; }
+                }
+                """).source("""
+                package t;
+                import static cc.gahaha.fastmultiversion.Mc.*;
+                public class Members {
+                    @Is("[26.1,26.2)") public static String old() { return "old"; }
+                    public static String kept() { return "new"; }
+                }
+                """).compile().assertSuccess();
+        assertEquals(List.of("kept"), methodNames(result.load("t.Forms")));
+        assertEquals(List.of("kept"), methodNames(result.load("t.Members")));
+    }
+
+    @Test
+    void leavesAnotherIsAlone() throws Exception {
+        // A single import of another Is wins over Mc's members imported on demand: that Is is not ours.
+        var result = TestCompiler.target(temp, "26.2").source("""
+                package other;
+                public @interface Is { String value(); }
+                """).source("""
+                package t;
+                import cc.gahaha.fastmultiversion.Mc.*;
+                import other.Is;
+                public class Mine {
+                    @Is("[26.1,26.2)") public static String kept() { return "kept"; }
+                }
+                """).compile().assertSuccess();
+        assertEquals(List.of("kept"), methodNames(result.load("t.Mine")));
+    }
+
     private static final String BRIDGE = """
             package t;
-            import cc.gahaha.fastmultiversion.IfMc;
+            import cc.gahaha.fastmultiversion.Mc;
             public class Bridge {
                 public static class Base<T> {
                     public String take(T value) { return "base"; }
                 }
                 public static class Impl extends Base<String> {
-                    @IfMc("[26.1,26.2)") @Override public String take(String value) { return "impl"; }
+                    @Mc.Is("[26.1,26.2)") @Override public String take(String value) { return "impl"; }
                 }
                 public static String call() {
                     Base<String> base = new Impl();
@@ -100,8 +144,8 @@ class IfMcTest {
 
     private static final String LEGACY = """
             package t;
-            import cc.gahaha.fastmultiversion.IfMc;
-            @IfMc("[26.1,26.2)")
+            import cc.gahaha.fastmultiversion.Mc;
+            @Mc.Is("[26.1,26.2)")
             public class Legacy {
                 public static class Inner {}
                 public static Runnable lambda = () -> {};
@@ -125,15 +169,14 @@ class IfMcTest {
 
     private static final String REFS = """
             package t;
-            import cc.gahaha.fastmultiversion.IfMc;
             import cc.gahaha.fastmultiversion.Mc;
             public class Refs {
-                @IfMc("[26.1,26.2)") static String oldOnly() { return "old"; }
+                @Mc.Is("[26.1,26.2)") static String oldOnly() { return "old"; }
                 static String guarded() {
                     if (Mc.is("[26.1,26.2)")) return oldOnly();
                     return "new";
                 }
-                @IfMc("[26.1,26.2)") static String alsoOld() { return oldOnly(); }
+                @Mc.Is("[26.1,26.2)") static String alsoOld() { return oldOnly(); }
                 static String broken() { return oldOnly(); }
             }
             """;
@@ -142,12 +185,12 @@ class IfMcTest {
     void reportsReferencesToRemovedMembersFromKeptCode() throws Exception {
         var result = TestCompiler.target(temp, "26.2").source(REFS).compile().assertFailure();
 
-        // Only broken() on line 11; guarded() and alsoOld() are pruned with oldOnly().
+        // Only broken() on line 10; guarded() and alsoOld() are pruned with oldOnly().
         // javac reports the missing symbol itself; the plugin explains why it is missing.
         assertEquals(1, result.errors().lines().filter(l -> l.startsWith("line ")).count(), result.errors());
-        assertTrue(result.errors().startsWith("line 11: cannot find symbol"), result.errors());
-        assertTrue(result.notes().contains("line 11: [multiversion] method Refs.oldOnly(...) is declared with "
-                + "@IfMc(\"[26.1,26.2)\"), so it is not part of the Minecraft 26.2 build"), result.notes());
+        assertTrue(result.errors().startsWith("line 10: cannot find symbol"), result.errors());
+        assertTrue(result.notes().contains("line 10: [multiversion] method Refs.oldOnly(...) is declared with "
+                + "@Mc.Is(\"[26.1,26.2)\"), so it is not part of the Minecraft 26.2 build"), result.notes());
     }
 
     @Test
@@ -165,16 +208,16 @@ class IfMcTest {
                 """).compile().assertFailure();
 
         assertTrue(result.errors().contains("line 3: cannot find symbol"), result.errors());
-        assertTrue(result.notes().contains("class Legacy is declared with @IfMc(\"[26.1,26.2)\")"), result.notes());
+        assertTrue(result.notes().contains("class Legacy is declared with @Mc.Is(\"[26.1,26.2)\")"), result.notes());
     }
 
     @Test
     void reportsInvalidRange() throws Exception {
         var result = TestCompiler.target(temp, "26.2").source("""
                 package t;
-                import cc.gahaha.fastmultiversion.IfMc;
+                import cc.gahaha.fastmultiversion.Mc;
                 public class BadRange {
-                    @IfMc("[26.1,26.2") void broken() {}
+                    @Mc.Is("[26.1,26.2") void broken() {}
                 }
                 """).compile().assertFailure();
 
@@ -184,8 +227,8 @@ class IfMcTest {
 
     private static final String POINT = """
             package t;
-            import cc.gahaha.fastmultiversion.IfMc;
-            public record Point(int x, @IfMc("[26.1,26.2)") int y) {}
+            import cc.gahaha.fastmultiversion.Mc;
+            public record Point(int x, @Mc.Is("[26.1,26.2)") int y) {}
             """;
 
     @Test
@@ -199,11 +242,10 @@ class IfMcTest {
 
     private static final String LOCAL = """
             package t;
-            import cc.gahaha.fastmultiversion.IfMc;
             import cc.gahaha.fastmultiversion.Mc;
             public class Local {
                 public static String run() {
-                    @IfMc("[26.1,26.2)")
+                    @Mc.Is("[26.1,26.2)")
                     class OldHelper { String name() { return "LOCAL_OLD"; } }
                     if (Mc.is("[26.1,26.2)")) {
                         return new OldHelper().name();

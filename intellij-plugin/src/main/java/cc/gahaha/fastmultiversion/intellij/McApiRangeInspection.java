@@ -155,9 +155,9 @@ public final class McApiRangeInspection extends AbstractBaseJavaLocalInspectionT
 
             @Override
             public void visitAnnotation(@NotNull PsiAnnotation annotation) {
-                PsiAnnotationMemberValue range = Guards.ifMcRange(annotation);
+                PsiAnnotationMemberValue range = Guards.annotationRange(annotation);
                 if (range != null) {
-                    check.range(range, "the range in @IfMc", "the declaration is in no build");
+                    check.range(range, "the range in @Mc.Is", "the declaration is in no build");
                 }
             }
         };
@@ -190,7 +190,7 @@ public final class McApiRangeInspection extends AbstractBaseJavaLocalInspectionT
         }
 
         /**
-         * A range of {@code Mc.is} or {@code @IfMc}, checked as the build reads it: a string literal or a
+         * A range of {@code Mc.is} or {@code @Mc.Is}, checked as the build reads it: a string literal or a
          * {@code String} constant of this file, valid, and matching at least one version the project builds.
          */
         void range(PsiElement range, String what, String unused) {
@@ -228,7 +228,7 @@ public final class McApiRangeInspection extends AbstractBaseJavaLocalInspectionT
 
         /**
          * A declaration of the mod itself that does not exist in every version the code using it runs in, e.g.
-         * an {@code @IfMc("[26.1,26.2)")} method called from code that also runs in 26.2. (In views, the
+         * an {@code @Mc.Is("[26.1,26.2)")} method called from code that also runs in 26.2. (In views, the
          * declarations a version does not have are dropped, so such uses do not resolve there.)
          */
         private void declarationVersions(PsiJavaCodeReferenceElement reference, @Nullable PsiElement target, long guard) {

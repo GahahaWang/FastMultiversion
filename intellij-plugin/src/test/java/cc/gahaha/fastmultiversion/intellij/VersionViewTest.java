@@ -111,12 +111,8 @@ public class VersionViewTest extends UsefulTestCase {
 
         myFixture.addClass("""
                 package cc.gahaha.fastmultiversion;
-                public final class Mc { private Mc() {} public static boolean is(String range) { return false; } }
-                """);
-        myFixture.addClass("""
-                package cc.gahaha.fastmultiversion;
-                public @interface IfMc { String value(); }
-                """);
+                public final class Mc { private Mc() {} public static boolean is(String range) { return false; } public @interface Is { String value(); } }
+                """);
         MultiversionProject.getInstance(myFixture.getProject()).setForTests(database, McVersion.parse("26.2"));
         myFixture.enableInspections(new McApiRangeInspection());
     }
@@ -302,7 +298,6 @@ public class VersionViewTest extends UsefulTestCase {
 
     public void testReportsJavaErrorsOfInactiveCodeWithItsVersion() {
         myFixture.configureByText("Errors.java", """
-                import cc.gahaha.fastmultiversion.IfMc;
                 import cc.gahaha.fastmultiversion.Mc;
                 import mc.*;
                 class Errors {
@@ -315,7 +310,7 @@ public class VersionViewTest extends UsefulTestCase {
                             Screen screen = mc.screen;
                         }
                     }
-                    @IfMc("[26.1,26.2)")
+                    @Mc.Is("[26.1,26.2)")
                     static Screen old(Minecraft mc) {
                         if (mc.screen != null) {
                             return mc.screen;
@@ -332,11 +327,11 @@ public class VersionViewTest extends UsefulTestCase {
 
     public void testDeclaresOncePerVersion() {
         myFixture.configureByText("Twice.java", """
-                import cc.gahaha.fastmultiversion.IfMc;
+                import cc.gahaha.fastmultiversion.Mc;
                 import mc.*;
                 class Twice {
-                    @IfMc("[26.1,26.2)") static Screen screen(Minecraft mc) { return mc.screen; }
-                    @IfMc("[26.2,)") static Screen screen(Minecraft mc) { return mc.gui.screen(); }
+                    @Mc.Is("[26.1,26.2)") static Screen screen(Minecraft mc) { return mc.screen; }
+                    @Mc.Is("[26.2,)") static Screen screen(Minecraft mc) { return mc.gui.screen(); }
                     static Screen current(Minecraft mc) { return scr<caret>een(mc); }
                 }
                 """);
@@ -383,7 +378,6 @@ public class VersionViewTest extends UsefulTestCase {
 
     public void testReportsUsesOfDeclarationsForOtherVersions() {
         myFixture.configureByText("Calls.java", """
-                import cc.gahaha.fastmultiversion.IfMc;
                 import cc.gahaha.fastmultiversion.Mc;
                 class Calls {
                     static int run() {
@@ -393,7 +387,7 @@ public class VersionViewTest extends UsefulTestCase {
                         return old(2); // fine: only 26.1 gets past the return
                     }
                     static int unguarded() { return old(3); }
-                    @IfMc("[26.1,26.2)") static int old(int a) { return a; }
+                    @Mc.Is("[26.1,26.2)") static int old(int a) { return a; }
                 }
                 """);
         List<HighlightInfo> errors = errors();

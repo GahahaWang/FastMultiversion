@@ -15,7 +15,7 @@ import java.util.List;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Completion inside the range of {@code Mc.is("...")} and {@code @IfMc("...")}: the versions the project
+ * Completion inside the range of {@code Mc.is("...")} and {@code @Mc.Is("...")}: the versions the project
  * builds, each alone, from it on, and before it, and the span from each to the next.
  */
 public final class RangeCompletionContributor extends CompletionContributor {
@@ -48,13 +48,13 @@ public final class RangeCompletionContributor extends CompletionContributor {
         result.stopHere();
     }
 
-    /** The range argument of {@code Mc.is} or the value of {@code @IfMc}. */
+    /** The range argument of {@code Mc.is} or the value of {@code @Mc.Is}. */
     private static boolean isRange(PsiLiteralExpression literal) {
         PsiMethodCallExpression call = PsiTreeUtil.getParentOfType(literal, PsiMethodCallExpression.class);
         if (call != null && Guards.mcIsRange(call) == literal) {
             return true;
         }
         PsiAnnotation annotation = PsiTreeUtil.getParentOfType(literal, PsiAnnotation.class);
-        return annotation != null && Guards.ifMcRange(annotation) == literal;
+        return annotation != null && Guards.annotationRange(annotation) == literal;
     }
 }

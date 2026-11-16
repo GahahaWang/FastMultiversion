@@ -37,7 +37,7 @@ import org.jetbrains.annotations.Nullable;
  *       versions it runs in instead (its problems are kept), and the javac plugin does when it builds them;</li>
  *   <li>on imports of classes and packages that only other supported versions have;</li>
  *   <li>"cannot resolve" on a name that other versions have: the inspection reports it with those versions;</li>
- *   <li>a declaration "already defined" by its twin for other versions ({@code @IfMc} on both), and a call
+ *   <li>a declaration "already defined" by its twin for other versions ({@code @Mc.Is} on both), and a call
  *       "ambiguous" between them.</li>
  * </ul>
  */

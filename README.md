@@ -226,8 +226,8 @@ versions/**/.gradle/
 
 ## Writing version-specific code
 
-Import `cc.gahaha.fastmultiversion.Mc` and `cc.gahaha.fastmultiversion.IfMc`. Each version's build keeps only
-the code that runs in that version.
+Import `cc.gahaha.fastmultiversion.Mc`: `Mc.is(...)` for statements and expressions, `@Mc.Is(...)` for
+declarations. Each version's build keeps only the code that runs in that version.
 
 ### Statements and expressions
 
@@ -257,16 +257,19 @@ and newer.
 
 ### Declarations
 
-`@IfMc` keeps a class, method, constructor, field, enum constant or record component only in the versions in
+`@Mc.Is` keeps a class, method, constructor, field, enum constant or record component only in the versions in
 its range:
 
 ```java
-@IfMc("[26.1,26.2)")
+@Mc.Is("[26.1,26.2)")
 static Screen screen(Minecraft mc) { return mc.screen; }
 
-@IfMc("[26.2,)")
+@Mc.Is("[26.2,)")
 static Screen screen(Minecraft mc) { return mc.gui.screen(); }
 ```
+
+`@Mc.Is` replaces `@IfMc` of FastMultiversion before 1.0: replace `@IfMc(` with `@Mc.Is(` and remove
+`import cc.gahaha.fastmultiversion.IfMc;`.
 
 ### Version ranges
 
@@ -317,10 +320,10 @@ The build stops when code uses Minecraft API in a version that does not have it,
 
 ```text
 'Minecraft.setScreen(Screen)' only exists in [26.1,26.2), but this code runs in [26.1,).
-Use it inside if (Mc.is("[26.1,26.2)")) or in a declaration with @IfMc("[26.1,26.2)").
+Use it inside if (Mc.is("[26.1,26.2)")) or in a declaration with @Mc.Is("[26.1,26.2)").
 ```
 
-Put such code inside `Mc.is` or `@IfMc` with the range the message gives.
+Put such code inside `Mc.is` or `@Mc.Is` with the range the message gives.
 
 ## Working in IntelliJ IDEA
 
@@ -348,7 +351,7 @@ With the FastMultiversion plugin installed:
 - Minecraft API used in code that also runs in versions without it is reported as you type. Press
   **Alt+Enter** for the fixes:
   - Surround with `if (Mc.is(...))`
-  - Annotate with `@IfMc(...)`
+  - Annotate with `@Mc.Is(...)`
   - Import a class of another version
   - Import packages on demand
 - Version ranges are checked as you type. Press **Ctrl+Space** inside a range to choose from the project's

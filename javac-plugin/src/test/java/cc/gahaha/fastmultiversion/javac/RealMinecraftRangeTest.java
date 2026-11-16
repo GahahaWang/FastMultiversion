@@ -62,7 +62,6 @@ class RealMinecraftRangeTest {
     private static final String GUARDED = """
             package mod;
 
-            import cc.gahaha.fastmultiversion.IfMc;
             import cc.gahaha.fastmultiversion.Mc;
             import com.mojang.blaze3d.pipeline.RenderTarget;
             import com.mojang.blaze3d.textures.GpuTexture;
@@ -84,10 +83,10 @@ class RealMinecraftRangeTest {
                     }
                 }
 
-                @IfMc("[26.1,26.3)")
+                @Mc.Is("[26.1,26.3)")
                 public static String describe(GpuTexture texture) { return "blaze3d"; }
 
-                @IfMc("[26.3,)")
+                @Mc.Is("[26.3,)")
                 public static String describe(com.mojang.renderpearl.api.textures.GpuTexture texture) { return "renderpearl"; }
 
                 public static void damage(ItemStack stack, ServerLevel level, ServerPlayer player) {

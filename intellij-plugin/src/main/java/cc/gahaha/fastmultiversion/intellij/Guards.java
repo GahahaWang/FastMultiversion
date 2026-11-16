@@ -32,12 +32,13 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Which versions a piece of code runs in, by the same rules as the javac plugin: a branch of an
  * {@code Mc.is} condition, an operand after {@code &&} or {@code ||}, an arm of {@code ?:}, a declaration
- * with {@code @IfMc}, and the statements after {@code if (!Mc.is(...)) return;}. Versions are bit masks
+ * with {@code @Mc.Is}, and the statements after {@code if (!Mc.is(...)) return;}. Versions are bit masks
  * over the API database's versions.
  */
 final class Guards {
     static final String MC = "cc.gahaha.fastmultiversion.Mc";
-    static final String IF_MC = "cc.gahaha.fastmultiversion.IfMc";
+    /** The annotation {@code @Mc.Is}, nested in {@code Mc}. */
+    static final String MC_IS = "cc.gahaha.fastmultiversion.Mc.Is";
 
     private final ApiDatabase db;
     private final long all;
@@ -103,9 +104,9 @@ final class Guards {
         return guard;
     }
 
-    /** The versions that keep {@code element} itself: its {@code @IfMc}, if it is a declaration. */
+    /** The versions that keep {@code element} itself: its {@code @Mc.Is}, if it is a declaration. */
     long own(PsiElement element) {
-        return element instanceof PsiMember member ? ifMc(member) : all;
+        return element instanceof PsiMember member ? annotatedVersions(member) : all;
     }
 
     long all() {
@@ -215,9 +216,9 @@ final class Guards {
         return owner != null && MC.equals(owner.getQualifiedName()) ? args[0] : null;
     }
 
-    /** The value of an {@code @IfMc(range)} annotation, or {@code null} if {@code annotation} is something else. */
-    static @Nullable PsiAnnotationMemberValue ifMcRange(PsiAnnotation annotation) {
-        return IF_MC.equals(annotation.getQualifiedName()) ? annotation.findDeclaredAttributeValue("value") : null;
+    /** The value of an {@code @Mc.Is(range)} annotation, or {@code null} if {@code annotation} is something else. */
+    static @Nullable PsiAnnotationMemberValue annotationRange(PsiAnnotation annotation) {
+        return MC_IS.equals(annotation.getQualifiedName()) ? annotation.findDeclaredAttributeValue("value") : null;
     }
 
     /**
@@ -269,9 +270,9 @@ final class Guards {
         return mask(range);
     }
 
-    /** The versions keeping a declaration with {@code @IfMc(range)}; all versions without one. */
-    long ifMc(PsiMember member) {
-        PsiAnnotation annotation = AnnotationUtil.findAnnotation(member, IF_MC);
+    /** The versions keeping a declaration with {@code @Mc.Is(range)}; all versions without one. */
+    long annotatedVersions(PsiMember member) {
+        PsiAnnotation annotation = AnnotationUtil.findAnnotation(member, MC_IS);
         if (annotation == null) {
             return all;
         }

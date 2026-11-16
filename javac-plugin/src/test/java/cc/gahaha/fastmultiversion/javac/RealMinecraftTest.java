@@ -32,7 +32,6 @@ class RealMinecraftTest {
     private static final String TEXTURES = """
             package mod;
 
-            import cc.gahaha.fastmultiversion.IfMc;
             import cc.gahaha.fastmultiversion.Mc;
             import com.mojang.blaze3d.pipeline.RenderTarget;
             import com.mojang.blaze3d.textures.GpuTexture;
@@ -52,10 +51,10 @@ class RealMinecraftTest {
                     }
                 }
 
-                @IfMc("[26.1,26.3)")
+                @Mc.Is("[26.1,26.3)")
                 public static String describe(GpuTexture texture) { return "blaze3d"; }
 
-                @IfMc("[26.3,)")
+                @Mc.Is("[26.3,)")
                 public static String describe(com.mojang.renderpearl.api.textures.GpuTexture texture) { return "renderpearl"; }
 
                 public static ItemStack diamonds() { return new ItemStack(Items.DIAMOND, 3); }

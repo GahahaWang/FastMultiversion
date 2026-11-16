@@ -18,7 +18,7 @@ import org.gradle.api.tasks.compile.JavaCompile;
  * Applied to each version project {@code :<version>}. It
  * <ul>
  *   <li>compiles the shared {@code src/main} (and the project's own {@code versions/<version>/src/main}),</li>
- *   <li>adds {@code Mc}/{@code @IfMc} to the compile classpath and the javac plugin to the processor path,</li>
+ *   <li>adds {@code Mc}/{@code @Mc.Is} to the compile classpath and the javac plugin to the processor path,</li>
  *   <li>runs javac with {@code -Xplugin:"FastMultiversion target=<version> apidb=..."} in a forked compiler
  *       with the exports the plugin needs,</li>
  *   <li>records this version's API ({@code generateVersionApi}) for the root project's database.</li>

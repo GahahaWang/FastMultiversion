@@ -1,2 +1,2 @@
-// Compile-only API for mod sources: Mc.is(...) and @IfMc.
+// Compile-only API for mod sources: Mc.is(...) and @Mc.Is.
 // After the javac plugin has pruned a build, no reference to these classes remains in the bytecode.

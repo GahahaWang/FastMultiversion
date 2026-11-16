@@ -15,22 +15,22 @@ import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-/** Annotates the enclosing method or field with {@code @IfMc("range")}. */
-final class AddIfMcFix implements LocalQuickFix {
+/** Annotates the enclosing method or field with {@code @Mc.Is("range")}. */
+final class AddMcIsFix implements LocalQuickFix {
     private final String range;
 
-    AddIfMcFix(String range) {
+    AddMcIsFix(String range) {
         this.range = range;
     }
 
     @Override
     public @NotNull String getName() {
-        return "Annotate with @IfMc(\"" + range + "\")";
+        return "Annotate with @Mc.Is(\"" + range + "\")";
     }
 
     @Override
     public @NotNull String getFamilyName() {
-        return "Annotate with @IfMc(...)";
+        return "Annotate with @Mc.Is(...)";
     }
 
     @Override
@@ -41,7 +41,7 @@ final class AddIfMcFix implements LocalQuickFix {
             return;
         }
         PsiAnnotation annotation = JavaPsiFacade.getElementFactory(project)
-                .createAnnotationFromText("@" + Guards.IF_MC + "(\"" + range + "\")", member);
+                .createAnnotationFromText("@" + Guards.MC_IS + "(\"" + range + "\")", member);
         PsiElement added = modifiers.addAfter(annotation, null);
         JavaCodeStyleManager.getInstance(project).shortenClassReferences(added);
     }

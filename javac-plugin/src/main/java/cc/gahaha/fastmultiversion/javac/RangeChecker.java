@@ -231,7 +231,7 @@ final class RangeChecker extends TreeScanner {
                         host.error(tree, unit, "'" + owner.getSimpleName() + "." + method.name + "' overrides "
                                 + describe(member) + ", which only exists like this in " + usable
                                 + ", but this method exists in " + db.range(guard) + ". Elsewhere it would override "
-                                + "nothing and never be called. Give it @IfMc(\"" + usable + "\").");
+                                + "nothing and never be called. Give it @Mc.Is(\"" + usable + "\").");
                         return;
                     }
                 }
@@ -256,7 +256,7 @@ final class RangeChecker extends TreeScanner {
                 : what + " exists in every version this code runs in, but only has this form (signature, "
                         + "static-ness or visibility) in " + usable;
         host.error(at, unit, problem + ", but this code runs in " + db.range(guard) + ". Use it inside "
-                + "if (Mc.is(\"" + usable + "\")) or in a declaration with @IfMc(\"" + usable + "\").");
+                + "if (Mc.is(\"" + usable + "\")) or in a declaration with @Mc.Is(\"" + usable + "\").");
         return false;
     }
 

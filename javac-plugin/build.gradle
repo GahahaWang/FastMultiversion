@@ -1,4 +1,4 @@
-// A javac plugin (-Xplugin:"FastMultiversion target=<version> [apidb=<file>]") that prunes Mc.is branches and @IfMc
+// A javac plugin (-Xplugin:"FastMultiversion target=<version> [apidb=<file>]") that prunes Mc.is branches and @Mc.Is
 // declarations right after parsing, so that javac compiles exactly the program for one Minecraft version,
 // and, given an API database, checks that kept code only uses Minecraft API where every version it runs in has it.
 apply plugin: 'java-test-fixtures'

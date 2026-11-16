@@ -292,7 +292,6 @@ class MultiversionPluginTest {
         write(project.resolve("src/main/java/mod/Textures.java"), """
                 package mod;
 
-                import cc.gahaha.fastmultiversion.IfMc;
                 import cc.gahaha.fastmultiversion.Mc;
                 import com.mojang.blaze3d.pipeline.RenderTarget;
                 import com.mojang.blaze3d.textures.GpuTexture;
@@ -309,7 +308,7 @@ class MultiversionPluginTest {
                         }
                     }
 
-                    @IfMc("[26.1,26.3)")
+                    @Mc.Is("[26.1,26.3)")
                     public static String describe(GpuTexture texture) { return "blaze3d"; }
                 }
                 """);

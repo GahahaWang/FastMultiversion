@@ -17,8 +17,8 @@ import java.util.List;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Declarations made once per version, e.g. {@code @IfMc("[26.1,26.2)") Screen screen(...)} and
- * {@code @IfMc("[26.2,)") Screen screen(...)}. Each build keeps one; the IDE sees all of them.
+ * Declarations made once per version, e.g. {@code @Mc.Is("[26.1,26.2)") Screen screen(...)} and
+ * {@code @Mc.Is("[26.2,)") Screen screen(...)}. Each build keeps one; the IDE sees all of them.
  */
 final class Twins {
     private Twins() {

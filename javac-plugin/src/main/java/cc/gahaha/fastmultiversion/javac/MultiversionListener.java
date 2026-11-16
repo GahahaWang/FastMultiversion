@@ -245,7 +245,7 @@ final class MultiversionListener implements TaskListener {
     McVersion target(JCTree at, CompilationUnitTree unit) {
         if (target == null && !missingTargetReported) {
             missingTargetReported = true;
-            error(at, unit, "Mc.is and @IfMc need the Minecraft version to build for: enable the plugin with "
+            error(at, unit, "Mc.is and @Mc.Is need the Minecraft version to build for: enable the plugin with "
                     + "-Xplugin:\"" + MultiversionPlugin.NAME + " " + MultiversionPlugin.TARGET_ARG + "<version>\"");
         }
         return target;

@@ -39,17 +39,17 @@ import java.util.Map;
 
 /**
  * Rewrites one parsed file into the program for the target version. Nothing is resolved yet, so
- * {@code Mc.is} and {@code @IfMc} are recognized by syntax ({@link McSyntax}), and a range must be a string
+ * {@code Mc.is} and {@code @Mc.Is} are recognized by syntax ({@link McSyntax}), and a range must be a string
  * literal or a {@code String} constant declared in the same file.
  *
  * <p>With a list of versions (from the API database), it also works out which of those versions each
  * piece of kept code runs in, its guard, for {@link RangeChecker}. Guards are bit masks over the versions,
  * stored for the kept nodes where they narrow: a branch of an {@code Mc.is} condition, the right side of
- * {@code &&} or {@code ||}, an arm of {@code ?:}, a declaration with {@code @IfMc}, and the statements
+ * {@code &&} or {@code ||}, an arm of {@code ?:}, a declaration with {@code @Mc.Is}, and the statements
  * after {@code if (!Mc.is(...)) return;}. A node's guard is that of its nearest recorded ancestor.
  */
 final class SourcePruner extends TreeTranslator {
-    /** A declaration removed by {@code @IfMc}, for the hint when kept code still refers to it. */
+    /** A declaration removed by {@code @Mc.Is}, for the hint when kept code still refers to it. */
     record Removed(String name, String description) {
     }
 
@@ -85,7 +85,7 @@ final class SourcePruner extends TreeTranslator {
         this.guard = all;
     }
 
-    /** Prunes the file in place and returns what {@code @IfMc} removed. */
+    /** Prunes the file in place and returns what {@code @Mc.Is} removed. */
     List<Removed> prune() {
         ListBuffer<JCTree> defs = new ListBuffer<>();
         for (JCTree def : withoutRemovedDeclarations(unit.defs)) {
@@ -191,7 +191,7 @@ final class SourcePruner extends TreeTranslator {
         }
     }
 
-    // ---- @IfMc
+    // ---- @Mc.Is
 
     @Override
     public void visitClassDef(JCClassDecl tree) {
@@ -213,7 +213,7 @@ final class SourcePruner extends TreeTranslator {
             McVersion target = host.rawTarget();
             boolean targetPasses = target == null || passingVersions(statement, List.of(target), 1) != 0;
             if (tracking() && current != guard) {
-                Long own = planned.get(statement); // a local class with @IfMc
+                Long own = planned.get(statement); // a local class with @Mc.Is
                 planned.put(statement, own == null ? current : own & current);
             }
             stats.append(translate(statement));
@@ -258,7 +258,7 @@ final class SourcePruner extends TreeTranslator {
         return kept.toList();
     }
 
-    /** Whether {@code @IfMc} removes the declaration; a kept one gets its range planned as its guard. */
+    /** Whether {@code @Mc.Is} removes the declaration; a kept one gets its range planned as its guard. */
     private boolean isRemoved(JCTree def) {
         JCModifiers mods = switch (def) {
             case JCClassDecl c -> c.mods;
@@ -270,13 +270,13 @@ final class SourcePruner extends TreeTranslator {
             return false;
         }
         for (JCAnnotation annotation : mods.annotations) {
-            if (!syntax.isIfMc(annotation)) {
+            if (!syntax.isMcIsAnnotation(annotation)) {
                 continue;
             }
             JCExpression value = annotationValue(annotation);
             String text = value == null ? null : constantString(value, 0);
             if (text == null) {
-                host.error(annotation, unit, "the range in @IfMc must be a string literal or a String constant "
+                host.error(annotation, unit, "the range in @Mc.Is must be a string literal or a String constant "
                         + "declared in this file");
                 return false;
             }
@@ -291,7 +291,7 @@ final class SourcePruner extends TreeTranslator {
                 }
                 return false;
             }
-            removed.add(new Removed(nameOf(def), describe(def) + " is declared with @IfMc(\"" + text + "\")"));
+            removed.add(new Removed(nameOf(def), describe(def) + " is declared with @Mc.Is(\"" + text + "\")"));
             return true;
         }
         return false;

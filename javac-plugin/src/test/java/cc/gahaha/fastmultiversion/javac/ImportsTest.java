@@ -46,7 +46,6 @@ class ImportsTest {
 
     private static final String USES = """
             package mod;
-            import cc.gahaha.fastmultiversion.IfMc;
             import cc.gahaha.fastmultiversion.Mc;
             import mc.NewThing;
             import mc.OldThing;
@@ -61,7 +60,7 @@ class ImportsTest {
                         return new NewThing().name() + Fresh.id() + " " + id();
                     }
                 }
-                @IfMc("[26.1,26.2)")
+                @Mc.Is("[26.1,26.2)")
                 static OldThing keep(OldThing thing) { return thing; }
             }
             """;
@@ -161,7 +160,6 @@ class ImportsTest {
         Path api = target.equals("26.1") ? movedOld : movedNew;
         var result = TestCompiler.target(temp, target).classpath(api).apiDatabase(movedDatabase).source("""
                 package mod;
-                import cc.gahaha.fastmultiversion.IfMc;
                 import cc.gahaha.fastmultiversion.Mc;
                 import mc.newpkg.Pose;
                 import mc.oldpkg.Pose;
@@ -170,8 +168,8 @@ class ImportsTest {
                         String name = Mc.is("[26.2,)") ? new Pose().name() : new Pose().name();
                         return name + " " + (Mc.is("[26.2,)") ? describe(new Pose()) : describe(new Pose()));
                     }
-                    @IfMc("[26.1,26.2)") static String describe(Pose pose) { return pose.name(); }
-                    @IfMc("[26.2,)") static String describe(Pose pose) { return pose.name(); }
+                    @Mc.Is("[26.1,26.2)") static String describe(Pose pose) { return pose.name(); }
+                    @Mc.Is("[26.2,)") static String describe(Pose pose) { return pose.name(); }
                 }
                 """).compile().assertSuccess();
 

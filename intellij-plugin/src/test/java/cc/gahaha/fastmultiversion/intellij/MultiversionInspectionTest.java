@@ -48,11 +48,7 @@ public class MultiversionInspectionTest extends LightJavaCodeInsightFixtureTestC
         super.setUp();
         myFixture.addClass("""
                 package cc.gahaha.fastmultiversion;
-                public final class Mc { private Mc() {} public static boolean is(String range) { return false; } }
-                """);
-        myFixture.addClass("""
-                package cc.gahaha.fastmultiversion;
-                public @interface IfMc { String value(); }
+                public final class Mc { private Mc() {} public static boolean is(String range) { return false; } public @interface Is { String value(); } }
                 """);
         myFixture.addClass("package mc; public interface Callback<T> { void call(T value); }");
         myFixture.addClass("package mc; public class Item {}");
@@ -94,7 +90,7 @@ public class MultiversionInspectionTest extends LightJavaCodeInsightFixtureTestC
 
         assertEquals(describe(errors), 4, errors.size());
         assertError(errors, "of", "'Registry.of(String, String)' only exists in [26.2,), but this code runs in [26.1,). "
-                + "Use it inside if (Mc.is(\"[26.2,)\")) or in a declaration with @IfMc(\"[26.2,)\").");
+                + "Use it inside if (Mc.is(\"[26.2,)\")) or in a declaration with @Mc.Is(\"[26.2,)\").");
         assertError(errors, "NewThing", "'mc.NewThing' only exists in [26.2,)");
         assertError(errors, "hurt", "'Registry.hurt(Callback<Registry>)' exists in every version this code runs in, "
                 + "but only has this form");
@@ -103,7 +99,6 @@ public class MultiversionInspectionTest extends LightJavaCodeInsightFixtureTestC
 
     public void testAcceptsGuardedCode() {
         myFixture.configureByText("Guarded.java", """
-                import cc.gahaha.fastmultiversion.IfMc;
                 import cc.gahaha.fastmultiversion.Mc;
                 import mc.*;
                 class Guarded {
@@ -122,15 +117,15 @@ public class MultiversionInspectionTest extends LightJavaCodeInsightFixtureTestC
                         return new NewThing().name();
                     }
                     boolean both() { return Mc.is("[26.2,)") && new NewThing().name() != null; }
-                    @IfMc("[26.2,)") String annotated() { return Registry.of("x", "y"); }
-                    @IfMc("[26.1,26.2)") String old() { return Registry.id("x", "y"); }
+                    @Mc.Is("[26.2,)") String annotated() { return Registry.of("x", "y"); }
+                    @Mc.Is("[26.1,26.2)") String old() { return Registry.id("x", "y"); }
                     void hurt(Registry r) {
                         if (Mc.is("[26.2,)")) {
                             r.hurt(x -> {});
                         }
                     }
                     static class MyScreen extends Screen {
-                        @IfMc("[26.2,)") @Override public void render(long x) {}
+                        @Mc.Is("[26.2,)") @Override public void render(long x) {}
                     }
                 }
                 """);
@@ -164,7 +159,6 @@ public class MultiversionInspectionTest extends LightJavaCodeInsightFixtureTestC
     public void testChecksRanges() {
         myFixture.addClass("package other; public class Ranges { public static final String NEW = \"[26.2,)\"; }");
         myFixture.configureByText("Ranges.java", """
-                import cc.gahaha.fastmultiversion.IfMc;
                 import cc.gahaha.fastmultiversion.Mc;
                 class Ranges {
                     static final String OLD = "[26.1," + "26.2)";
@@ -172,8 +166,8 @@ public class MultiversionInspectionTest extends LightJavaCodeInsightFixtureTestC
                     boolean b() { return Mc.is("26.3"); }
                     boolean c() { return Mc.is(other.Ranges.NEW); }
                     boolean d() { return Mc.is(OLD) || Mc.is("26.2"); }
-                    @IfMc("[26.1,26.2)") void e() {}
-                    @IfMc("2x.1") void f() {}
+                    @Mc.Is("[26.1,26.2)") void e() {}
+                    @Mc.Is("2x.1") void f() {}
                 }
                 """);
         List<HighlightInfo> problems = myFixture.doHighlighting(HighlightSeverity.WARNING);
@@ -218,19 +212,19 @@ public class MultiversionInspectionTest extends LightJavaCodeInsightFixtureTestC
         assertEmpty(describe(errors()), errors());
     }
 
-    public void testAnnotatesWithIfMc() {
+    public void testAnnotatesWithMcIs() {
         myFixture.configureByText("MyScreen.java", """
                 import mc.*;
                 class MyScreen extends Screen {
                     @Override public void ren<caret>der(long x) {}
                 }
                 """);
-        IntentionAction fix = myFixture.findSingleIntention("Annotate with @IfMc(\"[26.2,)\")");
+        IntentionAction fix = myFixture.findSingleIntention("Annotate with @Mc.Is(\"[26.2,)\")");
         myFixture.launchAction(fix);
 
         String text = myFixture.getFile().getText();
-        assertTrue(text, text.contains("import cc.gahaha.fastmultiversion.IfMc;"));
-        assertTrue(text, text.contains("@IfMc(\"[26.2,)\")"));
+        assertTrue(text, text.contains("import cc.gahaha.fastmultiversion.Mc;"));
+        assertTrue(text, text.contains("@Mc.Is(\"[26.2,)\")"));
         assertEmpty(describe(errors()), errors());
     }
 
