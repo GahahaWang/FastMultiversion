@@ -516,6 +516,21 @@ public class VersionViewTest extends UsefulTestCase {
         assertError(errors(), "Range", "'mc.pos.Range' only exists in [26.2,)");
     }
 
+    public void testTheFirstImportWinsWhereAVersionHasBothClasses() {
+        // 26.1 has mc.util.Layer and mc.util.pos.Layer, 26.2 only the latter: Layer is mc.util.pos.Layer in both, as
+        // in the build, and so is what Layers.current() returns.
+        myFixture.configureByText("Current.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.util.pos.Layer;
+                import mc.util.Layer;
+                class Current {
+                    @Mc.Is("[26.1,26.2)") static Layer current() { return mc.Layers.current(); }
+                    @Mc.Is("[26.2,)") static Layer current() { return mc.Layers.current(); }
+                }
+                """);
+        assertEmpty(describe(errors()), errors());
+    }
+
     public void testReloadingTheSetupRebuildsTheViews() {
         myFixture.configureByText("Compat.java", COMPAT);
         MultiversionProject setup = MultiversionProject.getInstance(myFixture.getProject());
@@ -660,7 +675,11 @@ public class VersionViewTest extends UsefulTestCase {
                             + "public void setScreen(Screen screen) {} }",
                     "mc/oldpkg/Pose.java", "package mc.oldpkg; public class Pose { public String name() { return \"old\"; } }",
                     "mc/old/Range.java", "package mc.old; public class Range { public boolean within(int y) { return y > 0; } }",
-                    "mc/Data.java", "package mc; public class Data { public static mc.old.Range range() { return null; } }"));
+                    "mc/Data.java", "package mc; public class Data { public static mc.old.Range range() { return null; } }",
+                    // 26.1 kept mc.util.Layer next to the moved mc.util.pos.Layer, as libraries do.
+                    "mc/util/Layer.java", "package mc.util; public class Layer {}",
+                    "mc/util/pos/Layer.java", "package mc.util.pos; public class Layer {}",
+                    "mc/Layers.java", "package mc; public class Layers { public static mc.util.pos.Layer current() { return null; } }"));
             Path current = compile(root, "mc-26.2", Map.of(
                     "mc/Screen.java", "package mc; public class Screen {}",
                     "mc/Gui.java", "package mc; public class Gui { public Screen screen() { return null; } "
@@ -668,7 +687,10 @@ public class VersionViewTest extends UsefulTestCase {
                     "mc/Minecraft.java", "package mc; public class Minecraft { public final Gui gui = new Gui(); }",
                     "mc/newpkg/Pose.java", "package mc.newpkg; public class Pose { public String name() { return \"new\"; } }",
                     "mc/pos/Range.java", "package mc.pos; public class Range { public boolean within(int y) { return y > 0; } }",
-                    "mc/Data.java", "package mc; public class Data { public static mc.pos.Range range() { return null; } }"));
+                    "mc/Data.java", "package mc; public class Data { public static mc.pos.Range range() { return null; } }",
+                    "mc/util/Layer.java", "package mc.util; public class Layer {}",
+                    "mc/util/pos/Layer.java", "package mc.util.pos; public class Layer {}",
+                    "mc/Layers.java", "package mc; public class Layers { public static mc.util.pos.Layer current() { return null; } }"));
             database = ApiDbGenerator.generate(List.of(
                     new VersionJars(McVersion.parse("26.1"), List.of(old)),
                     new VersionJars(McVersion.parse("26.2"), List.of(current))));

@@ -176,6 +176,49 @@ class ImportsTest {
         assertEquals(expected, result.call("mod.Poses", "run", api));
     }
 
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {"26.1 | new-pose", "26.2 | new-pose"})
+    void theFirstImportWinsWhereAVersionHasBothClasses(String target, String expected) throws Exception {
+        // 26.1 kept the old class next to the moved one, as libraries do; 26.2 only has the moved one.
+        Path both = TestCompiler.jar(temp, "both-26.1", """
+                package mc.oldpkg;
+                public class Pose { public String name() { return "old-pose"; } }
+                """, """
+                package mc.newpkg;
+                public class Pose { public String name() { return "new-pose"; } }
+                """, """
+                package mc;
+                public class Poses { public static mc.newpkg.Pose current() { return new mc.newpkg.Pose(); } }
+                """);
+        Path moved = TestCompiler.jar(temp, "only-26.2", """
+                package mc.newpkg;
+                public class Pose { public String name() { return "new-pose"; } }
+                """, """
+                package mc;
+                public class Poses { public static mc.newpkg.Pose current() { return new mc.newpkg.Pose(); } }
+                """);
+        Path database = temp.resolve("both.mcapi");
+        ApiDbGenerator.generate(List.of(
+                new VersionJars(McVersion.parse("26.1"), List.of(both)),
+                new VersionJars(McVersion.parse("26.2"), List.of(moved)))).write(database);
+        Path api = target.equals("26.1") ? both : moved;
+
+        // Pose is mc.newpkg.Pose wherever it exists, also in 26.1, which has both: the first import wins.
+        var result = TestCompiler.target(temp, target).classpath(api).apiDatabase(database).source("""
+                package mod;
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.newpkg.Pose;
+                import mc.oldpkg.Pose;
+                public class Current {
+                    public static String run() { return current().name(); }
+                    @Mc.Is("[26.1,26.2)") static Pose current() { return mc.Poses.current(); }
+                    @Mc.Is("[26.2,)") static Pose current() { return mc.Poses.current(); }
+                }
+                """).compile().assertSuccess();
+
+        assertEquals(expected, result.call("mod.Current", "run", api));
+    }
+
     @Test
     void stillRejectsImportsOfClassesNoVersionHas() throws Exception {
         buildMovedApis();

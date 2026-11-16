@@ -325,6 +325,14 @@ import com.mojang.renderpearl.vertex.*;  // newer versions
 Each version uses the package it has. Importing the class from both packages by name also builds, but the IDE
 only resolves the name when the active version's import comes first.
 
+Where a version has both classes (a library may keep the old class next to the moved one), the first of the
+imports wins in that version, in the build and in the IDE:
+
+```java
+import fi.dy.masa.malilib.util.position.LayerRange;  // preferred wherever it exists
+import fi.dy.masa.malilib.util.LayerRange;           // only where the other one does not
+```
+
 A method that returns another class in some versions can be called once for all of them, as long as its
 result is only used right away and every version's class has what is used:
 

@@ -74,14 +74,22 @@ final class Imports {
      * from each version's package under the same simple name, e.g. a class that moved to another package:
      * each build keeps the import its version has. Imports of classes no version has are kept, so that
      * javac still reports them.
+     *
+     * <p>Where a version has several of them (e.g. a library kept the old class next to the moved one), the
+     * first import of the name wins, as in the IDE: a later class import of the same simple name is removed
+     * if both are classes of the database. So the order of the imports says which class a version prefers.
      */
     static void removeOtherVersionClasses(JCCompilationUnit unit, Predicate<String> exists, Predicate<String> otherVersion) {
         ListBuffer<JCTree> kept = new ListBuffer<>();
+        Set<Name> imported = new HashSet<>(); // simple names of kept class imports of database classes
         for (JCTree def : unit.defs) {
             if (def instanceof JCImport imp && !isOnDemand(imp)) {
                 String className = TreeInfo.fullName(imp.isStatic() ? imp.qualid.selected : imp.qualid).toString();
                 if (!exists.test(className) && otherVersion.test(className)) {
                     continue;
+                }
+                if (!imp.isStatic() && otherVersion.test(className) && !imported.add(imp.qualid.name)) {
+                    continue; // an earlier import of the same name, which this version has too, wins
                 }
             }
             kept.append(def);

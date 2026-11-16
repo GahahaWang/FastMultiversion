@@ -10,6 +10,8 @@ import com.intellij.psi.PsiCall;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiErrorElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiImportList;
+import com.intellij.psi.PsiImportStatement;
 import com.intellij.psi.PsiImportStatementBase;
 import com.intellij.psi.PsiImportStaticStatement;
 import com.intellij.psi.PsiJavaCodeReferenceElement;
@@ -36,6 +38,9 @@ import org.jetbrains.annotations.Nullable;
  *   <li>in code that does not run in the active version: {@link McApiRangeInspection} checks it against the
  *       versions it runs in instead (its problems are kept), and the javac plugin does when it builds them;</li>
  *   <li>on imports of classes and packages that only other supported versions have;</li>
+ *   <li>"already defined in a single-type import" on a later import of a class whose simple name an earlier
+ *       import of another class already took, where the active version has both: the build drops the later
+ *       one, as the first import wins;</li>
  *   <li>"cannot resolve" on a name that other versions have: the inspection reports it with those versions;</li>
  *   <li>a declaration "already defined" by its twin for other versions ({@code @Mc.Is} on both), and a call
  *       "ambiguous" between them.</li>
@@ -58,7 +63,7 @@ public final class InactiveCodeHighlightFilter implements HighlightInfoFilter {
         }
         PsiImportStatementBase importStatement = PsiTreeUtil.getParentOfType(at, PsiImportStatementBase.class);
         if (importStatement != null) {
-            return !isFromOtherVersions(importStatement, state);
+            return !isFromOtherVersions(importStatement, state) && !isShadowedByAnEarlierImport(importStatement, state);
         }
         Guards guards = new Guards(state.db());
         if ((guards.of(at) & state.activeBit()) == 0) {
@@ -142,5 +147,32 @@ public final class InactiveCodeHighlightFilter implements HighlightInfoFilter {
             name = name.substring(0, name.lastIndexOf('.')); // import static a.b.C.member;
         }
         return OtherVersions.apiClass(state.db(), name) != null;
+    }
+
+    /**
+     * A class import of a class the database knows whose simple name an earlier such import, which resolves here,
+     * already took ("already defined in a single-type import"): this version has both classes, e.g. a library kept
+     * the old class next to the moved one, and the build drops the later import, as the first one wins.
+     */
+    private static boolean isShadowedByAnEarlierImport(PsiImportStatementBase statement, MultiversionProject.State state) {
+        if (!(statement instanceof PsiImportStatement single) || single.isOnDemand() || single.getQualifiedName() == null
+                || OtherVersions.apiClass(state.db(), single.getQualifiedName()) == null
+                || !(statement.getParent() instanceof PsiImportList imports)) {
+            return false;
+        }
+        String simpleName = single.getImportReference() == null ? null : single.getImportReference().getReferenceName();
+        for (PsiImportStatement earlier : imports.getImportStatements()) {
+            if (earlier == single) {
+                return false;
+            }
+            String name = earlier.getQualifiedName();
+            if (!earlier.isOnDemand() && name != null && earlier.getImportReference() != null
+                    && earlier.getImportReference().getReferenceName() != null
+                    && earlier.getImportReference().getReferenceName().equals(simpleName)
+                    && earlier.resolve() != null && OtherVersions.apiClass(state.db(), name) != null) {
+                return true;
+            }
+        }
+        return false;
     }
 }
