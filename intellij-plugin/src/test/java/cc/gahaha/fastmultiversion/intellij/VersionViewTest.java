@@ -112,7 +112,7 @@ public class VersionViewTest extends UsefulTestCase {
         myFixture.addClass("""
                 package cc.gahaha.fastmultiversion;
                 public final class Mc { private Mc() {} public static boolean is(String range) { return false; } public @interface Is { String value(); } }
-                """);
+                """);
         MultiversionProject.getInstance(myFixture.getProject()).setForTests(database, McVersion.parse("26.2"));
         myFixture.enableInspections(new McApiRangeInspection());
     }
@@ -422,6 +422,36 @@ public class VersionViewTest extends UsefulTestCase {
         int offset = myFixture.getCaretOffset();
         assertNull(new InactiveGotoDeclarationHandler().getGotoDeclarationTargets(
                 myFixture.getFile().findElementAt(offset), offset, myFixture.getEditor()));
+    }
+
+    public void testNavigatesToClassesOfOtherVersionsFromActiveCode() {
+        // mc.Options only exists in 26.1; the active version is 26.2, where the IDE finds no declaration.
+        String imports = """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.Opt<caret>ions;
+                import mc.Minecraft;
+                class Imports {
+                    static boolean hidden(Minecraft mc) {
+                        if (!Mc.is("[26.2,)")) {
+                            return mc.options.hideGui;
+                        }
+                        return false;
+                    }
+                }
+                """;
+        myFixture.configureByText("Imports.java", imports);
+        PsiElement[] targets = gotoTargets();
+        assertEquals(1, targets.length);
+        assertTrue(path(targets[0]), path(targets[0]).endsWith("/mc-26.1/mc/Options.class"));
+
+        List<? extends DocumentationTarget> documented = IdeDocumentationTargetProvider.getInstance(myFixture.getProject())
+                .documentationTargets(myFixture.getEditor(), myFixture.getFile(), myFixture.getCaretOffset());
+        assertFalse(documented.isEmpty());
+        assertTrue(path(((JavaDocumentationTarget) documented.getFirst()).getElement()).contains("/mc-26.1/"));
+
+        // A name that no version has stays unresolved.
+        myFixture.configureByText("Typo.java", imports.replace("mc.Opt<caret>ions", "mc.Opt<caret>ionz"));
+        assertEquals(0, gotoTargets().length);
     }
 
     public void testDocumentsTheDeclarationOfTheBranchVersion() {

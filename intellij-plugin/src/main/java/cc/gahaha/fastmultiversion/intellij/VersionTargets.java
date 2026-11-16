@@ -15,7 +15,8 @@ import org.jetbrains.annotations.Nullable;
 /**
  * What a name refers to, for navigation and documentation, where the IDE's own answer is wrong: in code that
  * does not run in the active version, resolved in the {@link VersionViews view} of the newest version it runs
- * in; in active code, a call that the IDE finds ambiguous between {@link Twins twins} for several versions.
+ * in; in active code, a name only other versions have (e.g. an import of a class the active version lacks) in
+ * the newest of them, and a call that the IDE finds ambiguous between {@link Twins twins} for several versions.
  */
 final class VersionTargets {
     private VersionTargets() {
@@ -23,7 +24,8 @@ final class VersionTargets {
 
     /**
      * The targets of the reference whose name is {@code leaf}, in the version the code runs in; empty if the
-     * code runs in the active version (the IDE's own resolution is right there) or the version has no view.
+     * code runs in the active version and the name resolves there (the IDE's own resolution is right), or the
+     * version has no view.
      */
     static List<PsiElement> of(@Nullable PsiElement leaf) {
         if (!(leaf instanceof PsiIdentifier) || !(leaf.getContainingFile() instanceof PsiJavaFile file)
@@ -37,15 +39,26 @@ final class VersionTargets {
         Guards guards = new Guards(state.db());
         long guard = guards.of(reference);
         if (guard != 0 && (guard & state.activeBit()) != 0) {
-            // Active code: only a call that the IDE finds ambiguous between twins for several versions.
+            // Active code. A name that the active version does not have but other versions do, such as an import
+            // of a class that only older versions have: in the newest of those versions.
+            if (reference.multiResolve(false).length == 0) {
+                OtherVersions.Found found = OtherVersions.find(reference, state.db(), state.active());
+                return found == null ? List.of() : in(state, file, reference, MultiversionProject.State.newest(found.versions()));
+            }
+            // Otherwise only a call that the IDE finds ambiguous between twins for several versions.
             PsiMethod method = reference.getParent() instanceof PsiCall call ? Twins.activeCandidate(call, guards, state.activeBit()) : null;
             return method == null ? List.of() : List.of(method);
         }
         if (guard == 0) {
             return List.of();
         }
-        PsiJavaFile view = VersionViews.of(state, file.getOriginalFile() instanceof PsiJavaFile original ? original : file,
-                MultiversionProject.State.newest(guard));
+        return in(state, file, reference, MultiversionProject.State.newest(guard));
+    }
+
+    /** The targets of {@code reference} resolved in the view of {@code version}; empty if it has no view. */
+    private static List<PsiElement> in(MultiversionProject.State state, PsiJavaFile file, PsiJavaCodeReferenceElement reference,
+                                       int version) {
+        PsiJavaFile view = VersionViews.of(state, file.getOriginalFile() instanceof PsiJavaFile original ? original : file, version);
         PsiJavaCodeReferenceElement inView = view == null ? null : VersionViews.counterpart(reference, view);
         if (inView == null) {
             return List.of();
