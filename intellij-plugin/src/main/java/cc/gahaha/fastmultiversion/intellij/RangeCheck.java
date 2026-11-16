@@ -182,16 +182,19 @@ final class RangeCheck {
         String descriptor = method == null ? null : JvmNames.descriptor(method);
         String owner = descriptor == null ? null
                 : owner(MemberKind.METHOD, method, method.getName(), descriptor, start(call.getMethodExpression(), method));
-        String nextName = next.getReferenceName();
-        if (owner == null || nextName == null) {
+        if (owner == null) {
             return 0;
         }
-        return switch (next.resolve()) {
+        String nextName = next.getReferenceName();
+        return switch (nextName == null ? null : next.resolve()) {
             case PsiMethod m when JvmNames.descriptor(m) != null -> db.compatibleChain(owner, method.getName(), descriptor,
                     MemberKind.METHOD, nextName, JvmNames.descriptor(m), referenceVersion);
             case PsiField f when JvmNames.descriptor(f.getType()) != null -> db.compatibleChain(owner, method.getName(), descriptor,
                     MemberKind.FIELD, nextName, JvmNames.descriptor(f.getType()), referenceVersion);
-            case null, default -> 0;
+            // n is not written yet ("m()." or a call without its arguments, which matches none of n's overloads)
+            // or does not exist: n is reported, and whether the chain works is not known until n resolves.
+            case null -> ~0L;
+            default -> 0;
         };
     }
 

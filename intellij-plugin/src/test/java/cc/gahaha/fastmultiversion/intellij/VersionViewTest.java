@@ -532,6 +532,15 @@ public class VersionViewTest extends UsefulTestCase {
                 """);
         assertEmpty(describe(errors()), errors());
 
+        // While the rest is being written (within has two overloads, so without its arguments it matches neither),
+        // only that is reported, not range().
+        for (String typing : List.of("mc.Data.range().within()", "mc.Data.range().")) {
+            myFixture.configureByText("Typing.java", "class Typing {\n    static boolean within() { return " + typing + "; }\n}\n");
+            List<HighlightInfo> errors = errors();
+            assertFalse(typing + ": " + describe(errors), errors.isEmpty());
+            assertFalse(typing + ": " + describe(errors), errors.stream().anyMatch(info -> text(info).equals("range")));
+        }
+
         // Written down, the returned class is another one in each version: still reported.
         myFixture.configureByText("Typed.java", """
                 class Typed {
@@ -752,7 +761,8 @@ public class VersionViewTest extends UsefulTestCase {
                     "mc/Minecraft.java", "package mc; public class Minecraft { public Screen screen; public Options options; "
                             + "public void setScreen(Screen screen) {} }",
                     "mc/oldpkg/Pose.java", "package mc.oldpkg; public class Pose { public String name() { return \"old\"; } }",
-                    "mc/old/Range.java", "package mc.old; public class Range { public boolean within(int y) { return y > 0; } }",
+                    "mc/old/Range.java", "package mc.old; public class Range { public boolean within(int y) { return y > 0; } "
+                            + "public boolean within(int x, int z) { return true; } }",
                     "mc/Data.java", "package mc; public class Data { public static mc.old.Range range() { return null; } }",
                     // 26.1 kept mc.util.Layer next to the moved mc.util.pos.Layer, as libraries do.
                     "mc/util/Layer.java", "package mc.util; public class Layer {}",
@@ -768,7 +778,8 @@ public class VersionViewTest extends UsefulTestCase {
                             + "public void setScreen(Screen screen) {} }",
                     "mc/Minecraft.java", "package mc; public class Minecraft { public final Gui gui = new Gui(); }",
                     "mc/newpkg/Pose.java", "package mc.newpkg; public class Pose { public String name() { return \"new\"; } }",
-                    "mc/pos/Range.java", "package mc.pos; public class Range { public boolean within(int y) { return y > 0; } }",
+                    "mc/pos/Range.java", "package mc.pos; public class Range { public boolean within(int y) { return y > 0; } "
+                            + "public boolean within(int x, int z) { return true; } }",
                     "mc/Data.java", "package mc; public class Data { public static mc.pos.Range range() { return null; } }",
                     "mc/util/Layer.java", "package mc.util; public class Layer {}",
                     "mc/util/pos/Layer.java", "package mc.util.pos; public class Layer {}",
