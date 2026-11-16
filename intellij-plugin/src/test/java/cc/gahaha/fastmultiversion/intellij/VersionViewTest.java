@@ -114,7 +114,7 @@ public class VersionViewTest extends UsefulTestCase {
                 public final class Mc { private Mc() {} public static boolean is(String range) { return false; } public @interface Is { String value(); } }
                 """);
         MultiversionProject.getInstance(myFixture.getProject()).setForTests(database, McVersion.parse("26.2"));
-        myFixture.enableInspections(new McApiRangeInspection());
+        myFixture.enableInspections(new McApiRangeInspection(), new McUnusedImportInspection());
     }
 
     @Override
@@ -556,6 +556,52 @@ public class VersionViewTest extends UsefulTestCase {
         assertEmpty(describe(errors()), errors());
     }
 
+    public void testReportsImportsThatNoVersionUses() {
+        // The IDE (26.2) cannot use the later imports of Line and Layer, nor the one of Thing (only 26.1 has
+        // mc.text.Line and mc.gone.Thing), and 26.1 does not either: there Line and Layer are those of the first
+        // imports, and nothing uses Thing. Options only exists in 26.1, whose code uses it.
+        myFixture.configureByText("Imports.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.text.pos.Line;
+                import mc.text.Line;
+                import mc.util.pos.Layer;
+                import mc.util.Layer;
+                import mc.gone.Thing;
+                import mc.Minecraft;
+                import mc.Options;
+                class Imports {
+                    Line line;
+                    Layer layer;
+                    static boolean hidden(Minecraft mc) {
+                        if (!Mc.is("[26.2,)")) {
+                            Options options = mc.options;
+                            return options.hideGui;
+                        }
+                        return false;
+                    }
+                }
+                """);
+        assertEquals(List.of("import mc.text.Line;", "import mc.util.Layer;", "import mc.gone.Thing;"), unusedImports());
+
+        myFixture.getEditor().getCaretModel().moveToOffset(myFixture.getFile().getText().indexOf("mc.gone.Thing"));
+        myFixture.launchAction(myFixture.findSingleIntention("Remove unused import"));
+        assertFalse(myFixture.getFile().getText(), myFixture.getFile().getText().contains("mc.gone.Thing"));
+        assertEquals(List.of("import mc.text.Line;", "import mc.util.Layer;"), unusedImports());
+
+        // Where the earlier import's class is missing in a version, the later import is that version's.
+        myFixture.configureByText("Poses.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import mc.newpkg.Pose;
+                import mc.oldpkg.Pose;
+                class Poses {
+                    static String name() {
+                        return Mc.is("[26.2,)") ? new Pose().name() : new Pose().name();
+                    }
+                }
+                """);
+        assertEmpty(unusedImports());
+    }
+
     public void testReloadingTheSetupRebuildsTheViews() {
         myFixture.configureByText("Compat.java", COMPAT);
         MultiversionProject setup = MultiversionProject.getInstance(myFixture.getProject());
@@ -651,6 +697,13 @@ public class VersionViewTest extends UsefulTestCase {
 
     private List<HighlightInfo> errors() {
         return myFixture.doHighlighting(HighlightSeverity.ERROR);
+    }
+
+    /** The imports highlighted as unused, in the order of the file. */
+    private List<String> unusedImports() {
+        return myFixture.doHighlighting(HighlightSeverity.WARNING).stream()
+                .filter(info -> "Unused import statement".equals(info.getDescription()))
+                .sorted(java.util.Comparator.comparingInt(HighlightInfo::getStartOffset)).map(this::text).toList();
     }
 
     private String text(HighlightInfo info) {

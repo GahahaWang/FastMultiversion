@@ -333,6 +333,9 @@ import fi.dy.masa.malilib.util.position.LayerRange;  // preferred wherever it ex
 import fi.dy.masa.malilib.util.LayerRange;           // only where the other one does not
 ```
 
+A name means one class in each version, so in every version that has both classes, `LayerRange` is the first
+one. To use the other class in such a version, write its full name, e.g. `fi.dy.masa.malilib.util.LayerRange`.
+
 A method that returns another class in some versions can be called once for all of them, as long as its
 result is only used right away and every version's class has what is used:
 
@@ -395,3 +398,5 @@ With the FastMultiversion plugin installed:
   - Import packages on demand
 - Version ranges are checked as you type. Press **Ctrl+Space** inside a range to choose from the project's
   versions.
+- An import of a class the active version does not have, or whose name an earlier import already takes, is
+  shown as unused only if no version uses it.

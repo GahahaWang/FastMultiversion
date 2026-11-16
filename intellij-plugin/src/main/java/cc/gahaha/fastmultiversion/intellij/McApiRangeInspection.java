@@ -83,16 +83,16 @@ public final class McApiRangeInspection extends AbstractBaseJavaLocalInspectionT
     private static final int MAX_IMPORT_FIXES = 5;
 
     /**
-     * Marks this inspection's problems for {@link InactiveCodeHighlightFilter}, which keeps them in inactive
-     * code (the IDE sets an info's tool id only after the filters ran). Its name must be the short name:
-     * the IDE looks the inspection up by it.
+     * Marks the problems of the plugin's inspections for {@link InactiveCodeHighlightFilter}, which keeps them
+     * where it hides the IDE's own (the IDE sets an info's tool id only after the filters ran). Its name must be
+     * the inspection's short name: the IDE looks the inspection up by it.
      */
-    static final class Group implements ProblemGroup {
-        static final Group INSTANCE = new Group();
+    record Group(String shortName) implements ProblemGroup {
+        static final Group INSTANCE = new Group(SHORT_NAME);
 
         @Override
         public String getProblemName() {
-            return SHORT_NAME;
+            return shortName;
         }
     }
 

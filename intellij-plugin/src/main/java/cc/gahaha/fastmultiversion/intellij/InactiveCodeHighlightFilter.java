@@ -41,6 +41,8 @@ import org.jetbrains.annotations.Nullable;
  *   <li>"already defined in a single-type import" on a later import of a class whose simple name an earlier
  *       import of another class already took, where the active version has both: the build drops the later
  *       one, as the first import wins;</li>
+ *   <li>(on both kinds of imports, "unused" too: {@link McUnusedImportInspection} reports them if no version
+ *       uses them);</li>
  *   <li>"cannot resolve" on a name that other versions have: the inspection reports it with those versions;</li>
  *   <li>a declaration "already defined" by its twin for other versions ({@code @Mc.Is} on both), and a call
  *       "ambiguous" between them.</li>
@@ -154,7 +156,7 @@ public final class InactiveCodeHighlightFilter implements HighlightInfoFilter {
      * already took ("already defined in a single-type import"): this version has both classes, e.g. a library kept
      * the old class next to the moved one, and the build drops the later import, as the first one wins.
      */
-    private static boolean isShadowedByAnEarlierImport(PsiImportStatementBase statement, MultiversionProject.State state) {
+    static boolean isShadowedByAnEarlierImport(PsiImportStatementBase statement, MultiversionProject.State state) {
         if (!(statement instanceof PsiImportStatement single) || single.isOnDemand() || single.getQualifiedName() == null
                 || OtherVersions.apiClass(state.db(), single.getQualifiedName()) == null
                 || !(statement.getParent() instanceof PsiImportList imports)) {

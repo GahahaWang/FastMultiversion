@@ -36,6 +36,13 @@
                          enabledByDefault="true"
                          level="ERROR"
                          implementationClass="cc.gahaha.fastmultiversion.intellij.McApiRangeInspection"/>
+        <localInspection language="JAVA"
+                         shortName="McUnusedImport"
+                         displayName="Import that no Minecraft version uses"
+                         groupName="FastMultiversion"
+                         enabledByDefault="true"
+                         level="WARNING"
+                         implementationClass="cc.gahaha.fastmultiversion.intellij.McUnusedImportInspection"/>
         <daemon.highlightInfoFilter implementation="cc.gahaha.fastmultiversion.intellij.InactiveCodeHighlightFilter"/>
         <annotator language="JAVA" implementationClass="cc.gahaha.fastmultiversion.intellij.InactiveNamesAnnotator"/>
 
