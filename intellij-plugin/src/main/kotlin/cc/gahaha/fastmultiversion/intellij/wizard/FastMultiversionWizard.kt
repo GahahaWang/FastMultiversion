@@ -14,6 +14,7 @@ import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.CheckBoxList
@@ -86,7 +87,7 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
     /** Reads Mojang's version list in the background, then shows it; [status] gets what the list is. */
     private fun loadVersions(status: (String) -> Unit) {
         ApplicationManager.getApplication().executeOnPooledThread {
-            val versions = MinecraftVersions.fetch(Fetcher(::readText))
+            val versions = MinecraftVersions.fetch(CACHE, Fetcher(::readText))
             ApplicationManager.getApplication().invokeLater({
                 if (versions != null && versions.isNotEmpty()) {
                     versionChoice.loaded(versions)
@@ -148,7 +149,7 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             loaders = ModSettings.LOADERS.filter { (it == "fabric" && fabricProperty.get()) || (it == "neoforge" && neoforgeProperty.get()) },
         )
         val pluginVersion = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.version ?: "0.0.0-SNAPSHOT"
-        val lookUp = ThrowableComputable<DependencyVersions, RuntimeException> { VersionLookup(Fetcher(::readText)).resolve(settings) }
+        val lookUp = ThrowableComputable<DependencyVersions, RuntimeException> { VersionLookup(CACHE, Fetcher(::readText)).resolve(settings) }
         val versions = if (ApplicationManager.getApplication().isDispatchThread) {
             ProgressManager.getInstance().runProcessWithProgressSynchronously(lookUp, "Looking up Fabric and NeoForge versions", false, project)
         } else {
@@ -179,5 +180,8 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
         } catch (e: IOException) {
             null
         }
+
+        /** What the wizard read online (versions of Minecraft, the loaders and their Gradle plugins), for creating projects offline. */
+        val CACHE: ResponseCache by lazy { FileResponseCache(Path.of(PathManager.getSystemPath(), "fastmultiversion", "downloads")) }
     }
 }

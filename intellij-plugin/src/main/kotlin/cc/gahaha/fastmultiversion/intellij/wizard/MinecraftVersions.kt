@@ -15,8 +15,11 @@ object MinecraftVersions {
     val FALLBACK: List<MinecraftVersion> =
         VersionLookup.DEFAULT_MINECRAFT_VERSIONS.sortedByDescending { McVersion.parse(it) }.map { MinecraftVersion(it, false) }
 
-    /** The supported versions on Mojang's list, newest first; `null` if it cannot be read. */
-    fun fetch(fetcher: Fetcher): List<MinecraftVersion>? = fetcher.fetch(MANIFEST)?.let(::parse)
+    /**
+     * The supported versions on Mojang's list, newest first: as it is now, or as it was when last read (kept in
+     * [cache]); `null` if it was never read.
+     */
+    fun fetch(cache: ResponseCache = ResponseCache.NONE, fetcher: Fetcher): List<MinecraftVersion>? = fetcher.read(MANIFEST, cache, ::parse)
 
     /**
      * The supported versions in a version manifest, newest first; `null` if it is not one. Mojang lists

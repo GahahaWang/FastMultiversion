@@ -106,9 +106,16 @@ With the IntelliJ plugin installed, choose **File → New → Project…**, then
 - the loaders: Fabric, NeoForge or both.
 
 The wizard creates the project described below, with a Gradle wrapper and a small mod for each loader, and
-imports it. It looks up the newest Fabric Loader, and Fabric API and NeoForge for each Minecraft version; what
-it cannot find online is marked `UNKNOWN` in `gradle.properties`. The project uses the newest Gradle plugin
-of the IntelliJ plugin's channel: `maven` with `latest.release`, or for a pre-release `maven-dev` with
+imports it. With both loaders, shared code goes in `src/main` and each loader's in `src/<loader>`. With one loader,
+the project has no loader projects (one project per version, running `gradle/version/version.gradle`), and all
+code is in `src/main`, where the mod's main class is also the loader's entrypoint.
+
+The wizard looks up the newest releases of Fabric Loom, ModDevGradle and Fabric Loader, and Fabric API and
+NeoForge for each Minecraft version. What it reads online (also Mojang's version list) is kept in the IDE's system
+directory: offline, the wizard uses what it read last time, and only before it ever read them the versions the
+plugin ships. What it cannot find at all is marked `UNKNOWN` in `gradle.properties`.
+
+The project uses the newest Gradle plugin of the IntelliJ plugin's channel: `maven` with `latest.release`, or for a pre-release `maven-dev` with
 `latest.integration`; for an IntelliJ plugin built from source, its version from `mavenLocal()`.
 
 To set up a project by hand instead, follow the rest of this section.

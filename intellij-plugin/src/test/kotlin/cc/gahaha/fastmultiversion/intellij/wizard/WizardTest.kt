@@ -88,20 +88,39 @@ class WizardTest {
 
     @Test
     fun looksUpTheNewestVersions() {
-        val responses = mapOf(
-            VersionLookup.FABRIC_LOADER to """[{"version":"0.21.0-beta","stable":false},{"version":"0.20.9","stable":true}]""",
-            VersionLookup.FABRIC_API to metadata("0.161.0+26.2", "0.161.9+26.2", "0.161.10+26.2", "0.170.0+26.3", "0.170.1+26.4"),
-            VersionLookup.NEOFORGE to metadata("26.2.0.93", "26.2.0.101", "26.2.0.110-beta", "26.1.2.126", "26.3.0.1-beta"),
-        )
         val settings = both.copy(versions = listOf("26.1.2", "26.2", "26.3"))
-        val versions = VersionLookup { responses[it] }.resolve(settings)
+        val versions = VersionLookup { RESPONSES[it] }.resolve(settings)
 
+        assertEquals("1.19.4", versions.fabricLoom) // releases only
+        assertEquals("2.0.148", versions.modDevGradle)
         assertEquals("0.20.9", versions.fabricLoader)
         assertEquals("0.161.10+26.2", versions.fabricApi["26.2"])
         assertEquals("26.2.0.101", versions.neoforge["26.2"]) // releases before betas
         assertEquals("26.3.0.1-beta", versions.neoforge["26.3"]) // a beta if that is all there is
         assertEquals("26.1.2.126", versions.neoforge["26.1.2"])
         assertEquals("0.155.3+26.1.2", versions.fabricApi["26.1.2"]) // not listed: the default
+    }
+
+    @Test
+    fun remembersWhatItReadForWhenOffline() {
+        val cache = FileResponseCache(Files.createTempDirectory("fmv-cache"))
+        val settings = both.copy(versions = listOf("26.2", "26.3"))
+        val online = VersionLookup(cache) { RESPONSES[it] }.resolve(settings)
+        val minecraft = MinecraftVersions.fetch(cache) { MANIFEST }
+
+        // Offline, or behind a login page that is no version list: what it read last time, not the defaults.
+        for (fetcher in listOf(Fetcher { null }, Fetcher { "<html>Log in to the network</html>" })) {
+            assertEquals(online, VersionLookup(cache, fetcher).resolve(settings))
+            assertEquals(minecraft, MinecraftVersions.fetch(cache, fetcher))
+        }
+        assertEquals("1.19.4", online.fabricLoom)
+        assertEquals("0.170.0+26.3", online.fabricApi["26.3"])
+        assertEquals(listOf("26.3", "26.2"), minecraft!!.map { it.id })
+
+        // Never read: the defaults.
+        val never = VersionLookup(FileResponseCache(Files.createTempDirectory("fmv-cache"))) { null }.resolve(settings)
+        assertEquals(VersionLookup.DEFAULTS.getProperty("fabric_loom"), never.fabricLoom)
+        assertEquals(VersionLookup.DEFAULTS.getProperty("moddevgradle"), never.modDevGradle)
     }
 
     @Test
@@ -219,6 +238,19 @@ class WizardTest {
         return dir
     }
 
-    private fun metadata(vararg versions: String) =
-        "<metadata><versioning><versions>" + versions.joinToString("") { "<version>$it</version>" } + "</versions></versioning></metadata>"
+    private companion object {
+        fun metadata(vararg versions: String) =
+            "<metadata><versioning><versions>" + versions.joinToString("") { "<version>$it</version>" } + "</versions></versioning></metadata>"
+
+        /** What the loaders' repositories answer. */
+        val RESPONSES = mapOf(
+            VersionLookup.FABRIC_LOOM to metadata("1.19.3", "1.19.4", "1.20.0-alpha.30", "1.20.0-alpha.31"),
+            VersionLookup.MOD_DEV_GRADLE to metadata("2.0.147", "2.0.148", "2.1.0-beta.2"),
+            VersionLookup.FABRIC_LOADER to """[{"version":"0.21.0-beta","stable":false},{"version":"0.20.9","stable":true}]""",
+            VersionLookup.FABRIC_API to metadata("0.161.0+26.2", "0.161.9+26.2", "0.161.10+26.2", "0.170.0+26.3", "0.170.1+26.4"),
+            VersionLookup.NEOFORGE to metadata("26.2.0.93", "26.2.0.101", "26.2.0.110-beta", "26.1.2.126", "26.3.0.1-beta"),
+        )
+
+        const val MANIFEST = """{"versions": [{"id": "26.3", "type": "release"}, {"id": "26.2", "type": "release"}]}"""
+    }
 }

@@ -2,11 +2,64 @@ package cc.gahaha.fastmultiversion.intellij.wizard
 
 import cc.gahaha.fastmultiversion.versioning.McVersion
 import com.google.gson.JsonParser
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import java.util.Properties
 
 /** Reads a URL as text; `null` if it cannot. */
 fun interface Fetcher {
     fun fetch(url: String): String?
+}
+
+/** What the wizard last read from each URL, for when it cannot reach it (e.g. offline). */
+interface ResponseCache {
+    fun load(url: String): String?
+    fun store(url: String, text: String)
+
+    companion object {
+        val NONE: ResponseCache = object : ResponseCache {
+            override fun load(url: String): String? = null
+            override fun store(url: String, text: String) {}
+        }
+    }
+}
+
+/** A [ResponseCache] in [dir], a file per URL. Trouble reading or writing it only loses the cached text. */
+class FileResponseCache(private val dir: Path) : ResponseCache {
+    override fun load(url: String): String? = try {
+        file(url).takeIf { Files.isRegularFile(it) }?.let { Files.readString(it) }
+    } catch (e: IOException) {
+        null
+    }
+
+    override fun store(url: String, text: String) {
+        try {
+            Files.createDirectories(dir)
+            val temporary = Files.createTempFile(dir, "download", ".tmp")
+            Files.writeString(temporary, text)
+            Files.move(temporary, file(url), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (e: IOException) {
+            // the next lookup reads it online again
+        }
+    }
+
+    private fun file(url: String): Path = dir.resolve(url.replace(Regex("[^A-Za-z0-9.-]"), "_"))
+}
+
+/**
+ * [parse] of what [url] holds now; if it cannot be read, or what it returns does not parse (e.g. a login page of
+ * a public network), of what it held the last time it was read. What parses is kept in [cache] for the next time.
+ */
+fun <T : Any> Fetcher.read(url: String, cache: ResponseCache, parse: (String) -> T?): T? {
+    val text = fetch(url)
+    val parsed = text?.let(parse)
+    if (text != null && parsed != null) {
+        cache.store(url, text)
+        return parsed
+    }
+    return cache.load(url)?.let(parse)
 }
 
 /** The versions of the build plugins and loaders a new project uses. */
@@ -29,19 +82,20 @@ data class DependencyVersions(
 }
 
 /**
- * Looks up the newest Fabric Loader, and Fabric API and NeoForge for each Minecraft version, from the loaders'
- * Maven repositories. Whatever it cannot reach comes from the defaults the plugin ships
- * (`fastmultiversion/template/defaults.properties`). Fabric Loom and ModDevGradle are not looked up: their
- * newest versions may be pre-releases, so the defaults are versions known to build FastMultiversion mods.
+ * Looks up the newest Fabric Loom, ModDevGradle and Fabric Loader (releases), and Fabric API and NeoForge for each
+ * Minecraft version, from the loaders' Maven repositories. What it reads is kept in [cache]: without a network, the
+ * versions come from what it read last time, and only before it ever read them from the defaults the plugin ships
+ * (`fastmultiversion/template/defaults.properties`).
  */
-class VersionLookup(private val fetcher: Fetcher) {
+class VersionLookup(private val cache: ResponseCache = ResponseCache.NONE, private val fetcher: Fetcher) {
     fun resolve(settings: ModSettings): DependencyVersions {
+        val loom = settings.fabric || settings.common
         val fabricApiVersions = if (settings.fabric) mavenVersions(FABRIC_API) else emptyList()
         val neoforgeVersions = if (settings.neoforge) mavenVersions(NEOFORGE) else emptyList()
         return DependencyVersions(
-            fabricLoom = DEFAULTS.getProperty("fabric_loom"),
-            modDevGradle = DEFAULTS.getProperty("moddevgradle"),
-            fabricLoader = latestFabricLoader() ?: DEFAULTS.getProperty("fabric_loader"),
+            fabricLoom = (if (loom) newestRelease(mavenVersions(FABRIC_LOOM)) else null) ?: DEFAULTS.getProperty("fabric_loom"),
+            modDevGradle = (if (settings.neoforge) newestRelease(mavenVersions(MOD_DEV_GRADLE)) else null) ?: DEFAULTS.getProperty("moddevgradle"),
+            fabricLoader = (if (settings.fabric) latestFabricLoader() else null) ?: DEFAULTS.getProperty("fabric_loader"),
             fabricApi = settings.versions.associateWith { version ->
                 newestFabricApi(fabricApiVersions, version) ?: DEFAULTS.getProperty("mc.$version.fabric_api")
             },
@@ -51,9 +105,8 @@ class VersionLookup(private val fetcher: Fetcher) {
         )
     }
 
-    private fun latestFabricLoader(): String? {
-        val json = fetcher.fetch(FABRIC_LOADER) ?: return null
-        return try {
+    private fun latestFabricLoader(): String? = fetcher.read(FABRIC_LOADER, cache) { json ->
+        try {
             JsonParser.parseString(json).asJsonArray
                 .map { it.asJsonObject }
                 .firstOrNull { it.get("stable")?.asBoolean == true }
@@ -63,15 +116,18 @@ class VersionLookup(private val fetcher: Fetcher) {
         }
     }
 
-    private fun mavenVersions(metadataUrl: String): List<String> {
-        val xml = fetcher.fetch(metadataUrl) ?: return emptyList()
-        return Regex("<version>([^<]+)</version>").findAll(xml).map { it.groupValues[1].trim() }.toList()
-    }
+    private fun mavenVersions(metadataUrl: String): List<String> = fetcher.read(metadataUrl, cache) { xml ->
+        Regex("<version>([^<]+)</version>").findAll(xml).map { it.groupValues[1].trim() }.toList().ifEmpty { null }
+    } ?: emptyList()
 
     companion object {
         const val FABRIC_LOADER = "https://meta.fabricmc.net/v2/versions/loader"
         const val FABRIC_API = "https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/maven-metadata.xml"
         const val NEOFORGE = "https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml"
+
+        /** The Gradle plugin markers: the versions of the plugin ids the build scripts apply. */
+        const val FABRIC_LOOM = "https://maven.fabricmc.net/net/fabricmc/fabric-loom/net.fabricmc.fabric-loom.gradle.plugin/maven-metadata.xml"
+        const val MOD_DEV_GRADLE = "https://maven.neoforged.net/releases/net/neoforged/moddev/net.neoforged.moddev.gradle.plugin/maven-metadata.xml"
 
         val DEFAULTS: Properties = Properties().apply {
             VersionLookup::class.java.getResourceAsStream("/fastmultiversion/template/defaults.properties")!!.use { load(it) }
@@ -79,6 +135,10 @@ class VersionLookup(private val fetcher: Fetcher) {
 
         /** The Minecraft versions the wizard proposes. */
         val DEFAULT_MINECRAFT_VERSIONS: List<String> = DEFAULTS.getProperty("minecraft_versions").split(',').map { it.trim() }
+
+        /** The newest release: no qualifier such as `-alpha.31` or `-beta`, e.g. `1.19.4` rather than `1.20.0-alpha.31`. */
+        fun newestRelease(versions: List<String>): String? =
+            versions.filter { '-' !in it }.maxWithOrNull(NUMBERS)
 
         /** Fabric API builds name their Minecraft version after a '+': `0.161.0+26.2`. */
         fun newestFabricApi(versions: List<String>, minecraft: String): String? =
