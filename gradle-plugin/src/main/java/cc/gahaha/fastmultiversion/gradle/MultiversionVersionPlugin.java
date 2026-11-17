@@ -47,9 +47,9 @@ public abstract class MultiversionVersionPlugin implements Plugin<Project> {
         SourceSet main = project.getExtensions().getByType(SourceSetContainer.class).getByName(SourceSet.MAIN_SOURCE_SET_NAME);
         String loader = version.getLoader();
         boolean ide = layout.ideSync();
-        // Which project owns src/main in the IDE: the active version's common project if there is one,
-        // otherwise the active version's (only) loader project, otherwise the active version's project.
-        boolean ownsMain = version.isCommon() || loader == null || (!layout.common() && version.isActiveLoader());
+        // Which project owns src/main in the IDE: the active version's common project if there is one (there is with
+        // several loaders), otherwise its project of the one loader, otherwise its only project.
+        boolean ownsMain = version.isCommon() || loader == null || !layout.common();
         if (!ide || (version.isActive() && ownsMain)) {
             main.getJava().srcDir(root.file("src/main/java"));
             main.getResources().srcDir(root.file("src/main/resources"));

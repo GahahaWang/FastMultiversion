@@ -189,7 +189,7 @@ class MultiversionPluginTest {
         assertTrue(Files.isRegularFile(project.resolve("versions/26.1/common/build/classes/java/main/mod/Uses.class")),
                 "the common projects compile src/main without a loader");
         assertTrue(Files.readString(project.resolve("build/multiversion/project.properties"))
-                .contains("loaders=fabric,neoforge\nactiveLoader=fabric\ncommon=true\napidb=build/multiversion/common/api.mcapi"));
+                .contains("loaders=fabric,neoforge\ncommon=true\napidb=build/multiversion/common/api.mcapi"));
 
         // In the IDE: src/main only in the active version's common project, src/<loader> in its loader project.
         String sync = gradle(project, "help", "-Didea.sync.active=true").build().getOutput();

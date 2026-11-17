@@ -23,7 +23,6 @@ import org.gradle.api.initialization.Settings;
  */
 public abstract class MultiversionSettingsPlugin implements Plugin<Settings> {
     public static final String ACTIVE_PROPERTY = "multiversion.active";
-    public static final String ACTIVE_LOADER_PROPERTY = "multiversion.activeLoader";
 
     @Override
     public void apply(Settings settings) {
@@ -73,17 +72,8 @@ public abstract class MultiversionSettingsPlugin implements Plugin<Settings> {
                     + "per-version common projects (Minecraft without a loader, plus libraries the shared code uses). "
                     + "In the IDE src/main belongs to them, so each loader sees the shared code but not the other loaders.");
         }
-        String activeLoader = null;
-        if (!loaders.isEmpty()) {
-            activeLoader = settings.getProviders().gradleProperty(ACTIVE_LOADER_PROPERTY)
-                    .orElse(extension.getActiveLoader())
-                    .getOrElse(loaders.getFirst());
-            if (!loaders.contains(activeLoader)) {
-                throw new GradleException("multiversion: the active loader " + activeLoader + " is not one of " + loaders);
-            }
-        }
         boolean ideSync = Boolean.parseBoolean(settings.getProviders().systemProperty("idea.sync.active").getOrElse("false"));
-        MultiversionLayout layout = new MultiversionLayout(versions, loaders, common, active, activeLoader, ideSync);
+        MultiversionLayout layout = new MultiversionLayout(versions, loaders, common, active, ideSync);
 
         Map<String, MultiversionLayout.Target> targets = new HashMap<>();
         for (MultiversionLayout.Target target : layout.targets()) {
@@ -117,8 +107,7 @@ public abstract class MultiversionSettingsPlugin implements Plugin<Settings> {
             MultiversionLayout.Target target = targets.get(project.getPath());
             if (target != null) {
                 project.getExtensions().add(MultiversionVersionExtension.class, "multiversion", new MultiversionVersionExtension(
-                        target.version(), target.loader(), target.isCommon(), target.version().equals(active),
-                        target.loader() != null && target.loader().equals(layout.activeLoader()), layout.versions()));
+                        target.version(), target.loader(), target.isCommon(), target.version().equals(active), layout.versions()));
                 project.getExtensions().getExtraProperties().set(MultiversionLayout.KEY, layout);
                 project.getPluginManager().apply(MultiversionVersionPlugin.class);
             }

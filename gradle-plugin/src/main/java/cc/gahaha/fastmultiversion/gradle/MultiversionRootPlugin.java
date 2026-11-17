@@ -87,15 +87,15 @@ public abstract class MultiversionRootPlugin implements Plugin<Project> {
     private static void writeInfo(Project root, MultiversionLayout layout) {
         Path buildDir = root.getLayout().getBuildDirectory().get().getAsFile().toPath();
         Path info = buildDir.resolve(INFO_PATH);
-        // The IDE checks src/main against the database of the projects that own it there.
+        // The IDE checks src/main against the database of the projects that own it there: the common projects, or
+        // those of the one loader, or the only ones.
         Path database = buildDir.resolve(MultiversionLayout.databasePath(
-                layout.common() ? MultiversionLayout.COMMON : layout.activeLoader()));
+                layout.common() ? MultiversionLayout.COMMON : layout.loaders().isEmpty() ? null : layout.loaders().getFirst()));
         StringBuilder text = new StringBuilder()
                 .append("versions=").append(String.join(",", layout.names())).append('\n')
                 .append("active=").append(layout.active()).append('\n');
         if (!layout.loaders().isEmpty()) {
             text.append("loaders=").append(String.join(",", layout.loaders())).append('\n')
-                    .append("activeLoader=").append(layout.activeLoader()).append('\n')
                     .append("common=").append(layout.common()).append('\n');
         }
         text.append("apidb=").append(root.getProjectDir().toPath().relativize(database).toString().replace('\\', '/')).append('\n');

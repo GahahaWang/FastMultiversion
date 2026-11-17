@@ -18,7 +18,6 @@ import org.gradle.api.provider.Property;
  *
  *     // or one project per version and loader, e.g. :26.2:fabric, running gradle/fabric/fabric.gradle:
  *     loaders 'fabric', 'neoforge'
- *     activeLoader = 'fabric'            // optional; also -Pmultiversion.activeLoader=...; default: the first
  * }
  * </pre>
  *
@@ -59,9 +58,6 @@ public abstract class MultiversionSettingsExtension {
 
     /** The version the IDE works with; the others still build, but only it gets the shared sources in the IDE. */
     public abstract Property<String> getActive();
-
-    /** The loader whose project gets {@code src/main} in the IDE. */
-    public abstract Property<String> getActiveLoader();
 
     /**
      * The build script, relative to the root directory, that every version project runs (without loaders).

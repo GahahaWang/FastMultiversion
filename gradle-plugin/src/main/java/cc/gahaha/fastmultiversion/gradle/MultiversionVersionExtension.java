@@ -21,17 +21,14 @@ public class MultiversionVersionExtension {
     private final String loader;
     private final boolean common;
     private final boolean active;
-    private final boolean activeLoader;
     private final List<McVersion> versions;
     private VersionedFiles files;
 
-    public MultiversionVersionExtension(McVersion version, String loader, boolean common, boolean active,
-                                        boolean activeLoader, List<McVersion> versions) {
+    public MultiversionVersionExtension(McVersion version, String loader, boolean common, boolean active, List<McVersion> versions) {
         this.version = version;
         this.loader = loader;
         this.common = common;
         this.active = active;
-        this.activeLoader = activeLoader;
         this.versions = List.copyOf(versions);
     }
 
@@ -53,11 +50,6 @@ public class MultiversionVersionExtension {
     /** Whether this is the version the IDE works with. */
     public boolean isActive() {
         return active;
-    }
-
-    /** Whether this project's loader is the one whose project gets {@code src/main} in the IDE. */
-    public boolean isActiveLoader() {
-        return activeLoader;
     }
 
     /** Every version the mod is built for, ascending. */

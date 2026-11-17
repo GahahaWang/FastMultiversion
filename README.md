@@ -155,7 +155,6 @@ All settings of the `multiversion` block:
 | `versions '26.1.2', '26.2'` | The Minecraft versions to build for. Required. |
 | `loaders 'fabric', 'neoforge'` | One project per version and loader. Optional. |
 | `active = '26.2'` | The version the IDE works with. Default: the newest. |
-| `activeLoader = 'fabric'` | The loader the IDE works with. Default: the first. |
 | `versionScript = 'version.gradle'` | Build script of each version project, without loaders. Default: `gradle/version/version.gradle`. |
 
 ### Project layout
@@ -210,7 +209,7 @@ one version. The `multiversion` object describes the project being configured:
 | `multiversion.version` | This project's Minecraft version, e.g. `'26.2'` |
 | `multiversion.loader` | This project's loader, e.g. `'fabric'` |
 | `multiversion.common` | Whether this is a `:<version>:common` project |
-| `multiversion.active` | Whether this is the version and loader the IDE works with |
+| `multiversion.active` | Whether this is the version the IDE works with |
 | `multiversion.versions` | All versions |
 | `multiversion.is('[26.2,)')` | Whether this project's version is in the range |
 | `multiversion.versioned('src/fabric/resources/mymod.classtweaker')` | This version's copy of an access widener, class tweaker or access transformer (see [Access wideners, class tweakers and access transformers](#access-wideners-class-tweakers-and-access-transformers)) |
@@ -471,15 +470,15 @@ Put such code inside `Mc.is` or `@Mc.Is` with the range the message gives.
    deleted), and then checks code of other versions again. Without the plugin, run it yourself after you change
    the versions or dependencies; any build also updates it.
 
-The IDE works with the **active version and loader**: the newest version and the first loader unless you set
-them. To switch, set them in `gradle.properties` and reload the Gradle project:
+The IDE works with the **active version**, the newest unless you set it, and with all of its loaders at once:
+`src/main` belongs to its common project and each `src/<loader>` to its project of that loader. To switch, set the
+version in `gradle.properties` and reload the Gradle project:
 
 ```properties
 multiversion.active=26.2
-multiversion.activeLoader=neoforge
 ```
 
-They can also be set with `-Pmultiversion.active=26.2` or in the `multiversion` block of `settings.gradle`.
+It can also be set with `-Pmultiversion.active=26.2` or in the `multiversion` block of `settings.gradle`.
 
 With the FastMultiversion plugin installed:
 

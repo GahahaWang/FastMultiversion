@@ -70,13 +70,13 @@ public final class MultiversionProject {
      * The version projects: {@code :<version>} without loaders, otherwise {@code :<version>:<loader>} plus
      * {@code :<version>:common} if there is a {@code common.gradle}.
      *
-     * @param base         the root project's directory; {@code null} in tests
-     * @param loaders      the loaders, empty for a mod without loaders
-     * @param activeLoader the loader whose project owns {@code src/main} in the IDE when there is no common project
-     * @param common       whether there are common projects (which then own {@code src/main} in the IDE)
+     * @param base    the root project's directory; {@code null} in tests
+     * @param loaders the loaders, empty for a mod without loaders
+     * @param common  whether there are common projects (which then own {@code src/main} in the IDE; there are with
+     *                several loaders)
      */
-    public record Layout(@Nullable Path base, List<String> loaders, @Nullable String activeLoader, boolean common) {
-        public static final Layout SINGLE = new Layout(null, List.of(), null, false);
+    public record Layout(@Nullable Path base, List<String> loaders, boolean common) {
+        public static final Layout SINGLE = new Layout(null, List.of(), false);
 
         /** The kind of version project that compiles {@code file}: a loader, "common", or {@code null} without loaders. */
         @Nullable String kind(@Nullable VirtualFile file) {
@@ -92,7 +92,7 @@ public final class MultiversionProject {
                     }
                 }
             }
-            return common ? "common" : activeLoader;
+            return common ? "common" : loaders.getFirst(); // without common projects there is one loader
         }
     }
 
@@ -189,7 +189,6 @@ public final class MultiversionProject {
             String loaders = properties.getProperty("loaders", "").strip();
             Layout layout = new Layout(Path.of(base),
                     loaders.isEmpty() ? List.of() : Arrays.stream(loaders.split(",")).map(String::strip).toList(),
-                    properties.getProperty("activeLoader"),
                     Boolean.parseBoolean(properties.getProperty("common", "false")));
             infoStamp = newInfoStamp;
             dbStamp = newDbStamp;

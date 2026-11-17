@@ -12,12 +12,9 @@ import java.util.Objects;
  * @param loaders      the loaders; empty for one project per version
  * @param common       whether each version also has a {@value #COMMON} project for {@code src/main}
  * @param active       the version the IDE works with
- * @param activeLoader the loader whose project gets {@code src/main} in the IDE when there is no common
- *                     project; {@code null} without loaders
  * @param ideSync      whether this build is IntelliJ's Gradle sync
  */
-record MultiversionLayout(List<McVersion> versions, List<String> loaders, boolean common, McVersion active,
-                          String activeLoader, boolean ideSync) {
+record MultiversionLayout(List<McVersion> versions, List<String> loaders, boolean common, McVersion active, boolean ideSync) {
     static final String KEY = "cc.gahaha.fastmultiversion.layout";
     /** The name of the per-version project that compiles {@code src/main} against Minecraft without a loader. */
     static final String COMMON = "common";
