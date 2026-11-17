@@ -3,7 +3,7 @@
 <idea-plugin require-restart="true">
     <id>cc.gahaha.fastmultiversion</id>
     <name>FastMultiversion</name>
-    <vendor>gahaha</vendor>
+    <vendor>Gahaha</vendor>
     <description><![CDATA[
     Support for Minecraft mods built for several Minecraft versions from one source tree with
     <code>Mc.is("range")</code> and <code>@Mc.Is("range")</code>:
