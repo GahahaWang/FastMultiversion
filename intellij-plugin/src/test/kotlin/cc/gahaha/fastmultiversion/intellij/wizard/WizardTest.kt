@@ -137,7 +137,9 @@ class WizardTest {
         assertTrue(settings, settings.contains("mavenLocal()"))
         assertTrue(settings, settings.contains("id 'cc.gahaha.fastmultiversion' version '${pluginVersion()}'"))
         assertTrue(settings, settings.contains("versions '26.1.2', '26.2', '26.3'"))
-        assertTrue(settings, settings.contains("loaders 'fabric', 'neoforge'"))
+        assertTrue(settings, settings.contains("multiversion {\n    versions '26.1.2', '26.2', '26.3'\n    loaders 'fabric', 'neoforge'\n}"))
+        assertTrue(dir.resolve("gradle/fabric/fabric.gradle").readText().startsWith("// The build script of every :<version>:fabric project;"))
+        assertTrue(dir.resolve("src/fabric/resources/fabric.mod.json").readText().contains("\"com.example.testmod.fabric.TestModFabric\""))
         val properties = dir.resolve("gradle.properties").readText()
         assertTrue(properties, properties.contains("mc.26.2.fabric_api=0.161.0+26.2"))
         assertTrue(properties, properties.contains("mc.26.1.2.range_fabric=>=26.1.2 <26.2"))
@@ -157,21 +159,43 @@ class WizardTest {
 
     @Test
     fun generatesAProjectForOneLoader() {
+        // One loader: a project per version (no loader projects), everything in src/main, the mod class is the entrypoint.
         val fabric = both.copy(projectName = "FabricOnly", versions = listOf("26.2"), loaders = listOf("fabric"))
         val dir = sampleDir("FabricOnly")
         ProjectGenerator.generate(dir, fabric, VersionLookup { null }.resolve(fabric), PluginRepository.Published("1.0.0"))
 
-        assertFalse(dir.resolve("gradle/common/common.gradle").exists()) // one loader owns src/main itself
-        assertFalse(dir.resolve("gradle/neoforge").exists())
+        for (path in listOf("gradle/common", "gradle/fabric", "gradle/neoforge", "src/fabric", "src/neoforge")) {
+            assertFalse(path, dir.resolve(path).exists())
+        }
         val build = dir.resolve("build.gradle").readText()
         assertTrue(build, build.contains("net.fabricmc.fabric-loom") && !build.contains("moddev"))
         val settings = dir.resolve("settings.gradle").readText()
         assertTrue(settings, settings.contains("maven { url = \"https://gahahawang.github.io/FastMultiversion/maven\" }"))
         assertTrue(settings, settings.contains("id 'cc.gahaha.fastmultiversion' version 'latest.release'"))
-        assertTrue(settings, settings.contains("loaders 'fabric'"))
+        assertTrue(settings, settings.contains("multiversion {\n    versions '26.2'\n}"))
+        assertFalse(settings, settings.contains("loaders"))
+        val script = dir.resolve("gradle/version/version.gradle").readText()
+        assertTrue(script, script.startsWith("// The build script of every :<version> project;") && script.contains("fabric-loom"))
         val mod = dir.resolve("src/main/java/com/example/testmod/TestMod.java").readText()
-        assertTrue(mod, mod.contains("LOGGER.info(\"Test Mod for Minecraft 26.2\");") && !mod.contains("Mc.is("))
+        assertTrue(mod, mod.contains("public final class TestMod implements ModInitializer"))
+        assertTrue(mod, mod.contains("LOGGER.info(\"Test Mod for Minecraft 26.2\");") && !mod.contains("Mc"))
+        val modJson = dir.resolve("src/main/resources/fabric.mod.json").readText()
+        assertTrue(modJson, modJson.contains("\"com.example.testmod.TestMod\""))
         assertNoPlaceholders(dir)
+
+        val neoforge = both.copy(projectName = "NeoForgeOnly", versions = listOf("26.2", "26.3"), loaders = listOf("neoforge"))
+        val neoDir = sampleDir("NeoForgeOnly")
+        ProjectGenerator.generate(neoDir, neoforge, VersionLookup { null }.resolve(neoforge), PluginRepository.Published("1.0.0"))
+
+        assertFalse(neoDir.resolve("src/neoforge").exists())
+        val neoBuild = neoDir.resolve("build.gradle").readText()
+        assertTrue(neoBuild, neoBuild.contains("net.neoforged.moddev") && !neoBuild.contains("fabric-loom"))
+        assertTrue(neoDir.resolve("gradle/version/version.gradle").readText().contains("net.neoforged.moddev"))
+        assertTrue(neoDir.resolve("src/main/resources/META-INF/neoforge.mods.toml").exists())
+        val neoMod = neoDir.resolve("src/main/java/com/example/testmod/TestMod.java").readText()
+        assertTrue(neoMod, neoMod.contains("@Mod(TestMod.MOD_ID)") && neoMod.contains("public TestMod() {"))
+        assertTrue(neoMod, neoMod.contains("import cc.gahaha.fastmultiversion.Mc;") && neoMod.contains("if (Mc.is(\"[26.3,)\"))"))
+        assertNoPlaceholders(neoDir)
     }
 
     private fun assertNoPlaceholders(dir: Path) {

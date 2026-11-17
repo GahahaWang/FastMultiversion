@@ -36,38 +36,70 @@ sealed interface PluginRepository {
 }
 
 /**
- * Writes a FastMultiversion mod project: the layout of the FastMultiversion template, with build scripts in
- * gradle/<kind>/, a Gradle wrapper, and a mod that logs which Minecraft versions it was built for.
+ * Writes a FastMultiversion mod project, with build scripts in gradle/<kind>/, a Gradle wrapper, and a mod that
+ * logs which Minecraft versions it was built for. With several loaders, the layout of the FastMultiversion
+ * template: a project per version and loader, shared code in src/main and each loader's in src/<loader>. With
+ * one loader, a project per version and everything in src/main.
  */
 object ProjectGenerator {
     fun generate(dir: Path, settings: ModSettings, versions: DependencyVersions, plugin: PluginRepository) {
         val values = values(settings, versions, plugin)
-        fun write(path: String, template: String) {
+        fun write(path: String, template: String, extra: Map<String, String> = emptyMap()) {
             val file = dir.resolve(path)
             Files.createDirectories(file.parent)
-            Files.writeString(file, fill(template(template), values))
+            Files.writeString(file, fill(template(template), values + extra))
         }
 
         write("settings.gradle", "settings.gradle")
         write("build.gradle", "build.gradle")
         write("gradle.properties", "gradle.properties")
         write(".gitignore", "gitignore")
+        val sources = settings.group.replace('.', '/')
         if (settings.common) {
             write("gradle/common/common.gradle", "common.gradle")
-        }
-        val sources = settings.group.replace('.', '/')
-        write("src/main/java/$sources/${settings.modClass}.java", "Mod.java")
-        if (settings.fabric) {
-            write("gradle/fabric/fabric.gradle", "fabric.gradle")
-            write("src/fabric/java/$sources/fabric/${settings.modClass}Fabric.java", "ModFabric.java")
-            write("src/fabric/resources/fabric.mod.json", "fabric.mod.json")
-        }
-        if (settings.neoforge) {
-            write("gradle/neoforge/neoforge.gradle", "neoforge.gradle")
-            write("src/neoforge/java/$sources/neoforge/${settings.modClass}NeoForge.java", "ModNeoForge.java")
-            write("src/neoforge/resources/META-INF/neoforge.mods.toml", "neoforge.mods.toml")
+            write("src/main/java/$sources/${settings.modClass}.java", "Mod.java")
+            if (settings.fabric) {
+                write("gradle/fabric/fabric.gradle", "fabric.gradle", mapOf("projects" to ":<version>:fabric"))
+                write("src/fabric/java/$sources/fabric/${settings.modClass}Fabric.java", "ModFabric.java")
+                write("src/fabric/resources/fabric.mod.json", "fabric.mod.json")
+            }
+            if (settings.neoforge) {
+                write("gradle/neoforge/neoforge.gradle", "neoforge.gradle", mapOf("projects" to ":<version>:neoforge"))
+                write("src/neoforge/java/$sources/neoforge/${settings.modClass}NeoForge.java", "ModNeoForge.java")
+                write("src/neoforge/resources/META-INF/neoforge.mods.toml", "neoforge.mods.toml")
+            }
+        } else if (settings.fabric) {
+            write("gradle/version/version.gradle", "fabric.gradle", mapOf("projects" to ":<version>"))
+            write("src/main/java/$sources/${settings.modClass}.java", "FabricMod.java")
+            write("src/main/resources/fabric.mod.json", "fabric.mod.json")
+        } else {
+            write("gradle/version/version.gradle", "neoforge.gradle", mapOf("projects" to ":<version>"))
+            write("src/main/java/$sources/${settings.modClass}.java", "NeoForgeMod.java")
+            write("src/main/resources/META-INF/neoforge.mods.toml", "neoforge.mods.toml")
         }
         copyWrapper(dir)
+    }
+
+    /**
+     * The `multiversion` block of settings.gradle: with several loaders, a project per version and loader; with
+     * one, a project per version, running gradle/version/version.gradle (the loader's build script).
+     */
+    private fun multiversionBlock(settings: ModSettings): String {
+        val version = settings.versions.last()
+        val loader = settings.loaders.first()
+        val layout = if (settings.common) {
+            """
+            |// One project per Minecraft version and loader, e.g. :$version:$loader in versions/$version/$loader,
+            |// running gradle/$loader/$loader.gradle. Shared code is in src/main, loader code in src/<loader>.
+            """.trimMargin()
+        } else {
+            """
+            |// One project per Minecraft version, e.g. :$version in versions/$version, running gradle/version/version.gradle.
+            |// All code is in src/main.
+            """.trimMargin()
+        }
+        val loaders = if (settings.common) "\n    loaders ${settings.loaders.joinToString(", ") { "'$it'" }}" else ""
+        return "$layout\nmultiversion {\n    versions ${settings.versions.joinToString(", ") { "'$it'" }}$loaders\n}"
     }
 
     private fun values(settings: ModSettings, versions: DependencyVersions, plugin: PluginRepository): Map<String, String> {
@@ -112,10 +144,10 @@ object ProjectGenerator {
             "loaderPlugins" to loaderPlugins.joinToString("\n") { "    $it" },
             "pluginVersions" to pluginVersions.joinToString("\n"),
             "perVersion" to perVersion,
-            "versions" to settings.versions.joinToString(", ") { "'$it'" },
-            "loaders" to settings.loaders.joinToString(", ") { "'$it'" },
-            "exampleVersion" to settings.versions.last(),
-            "exampleLoader" to settings.loaders.first(),
+            "multiversion" to multiversionBlock(settings),
+            // With one loader, the mod's own class is the entrypoint.
+            "fabricEntrypoint" to if (settings.common) "${settings.group}.fabric.${settings.modClass}Fabric" else "${settings.group}.${settings.modClass}",
+            "mcImport" to if (settings.versions.size > 1) "import cc.gahaha.fastmultiversion.Mc;\n" else "",
             "initBody" to initBody(settings),
         )
     }

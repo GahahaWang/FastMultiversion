@@ -166,6 +166,17 @@ FastMultiversion creates a Gradle project for each version and loader, such as `
 `versions/26.2/fabric`. Each of these projects runs `gradle/fabric/fabric.gradle`. Without loaders there is
 one project per version, such as `:26.2` in `versions/26.2`, running `gradle/version/version.gradle`.
 
+A mod for one loader needs no `loaders`: `gradle/version/version.gradle` sets up that loader, and all code is in
+`src/main`:
+
+```text
+settings.gradle                   multiversion { versions ... }, without loaders
+build.gradle                      the loader's plugin, declared with `apply false`
+gradle/version/version.gradle     the build script of every :<version> project
+src/main/                         all code and resources
+versions/                         one directory per version, created for you
+```
+
 Keep each build script in its own directory under `gradle/`: there, IntelliJ IDEA knows the plugins the
 script applies and completes and checks `loom { }`, `minecraft`, `multiversion` and so on. A script can also
 be in the root directory, such as `fabric.gradle`, but there the IDE cannot resolve them.
