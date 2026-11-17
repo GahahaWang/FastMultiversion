@@ -25,6 +25,28 @@ subprojects {
                     url = rootProject.layout.buildDirectory.dir('repo')
                 }
             }
+            publications.withType(MavenPublication).configureEach {
+                pom {
+                    url = 'https://github.com/GahahaWang/FastMultiversion'
+                    licenses {
+                        license {
+                            name = 'MPL-2.0'
+                            url = 'https://www.mozilla.org/MPL/2.0/'
+                        }
+                    }
+                    scm {
+                        url = 'https://github.com/GahahaWang/FastMultiversion'
+                    }
+                }
+            }
+        }
+    }
+
+    // FastMultiversion is under the Mozilla Public License 2.0: every jar carries the license, and the POMs name it
+    // and where the source is.
+    tasks.withType(Jar).configureEach {
+        from(rootProject.file('LICENSE')) {
+            into 'META-INF'
         }
     }
 

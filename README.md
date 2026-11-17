@@ -555,3 +555,10 @@ With the FastMultiversion plugin installed:
   Loom and ModDevGradle never remove theirs.
 - Access widener, class tweaker and access transformer entries are checked against the versions that get them.
   Without the Minecraft Development plugin, these files open as text.
+
+## License
+
+FastMultiversion is under the [Mozilla Public License 2.0](LICENSE): you may use, change and share it, and files
+of it that you change and share stay under the same license, with their source. It does not reach the mods built
+with it: `Mc` is only on their compile classpath, `Mc.is` is gone from their code once compiled, and `@Mc.Is` is
+not kept in class files, so a mod can have any license.

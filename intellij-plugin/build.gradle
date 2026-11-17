@@ -88,6 +88,6 @@ tasks.named('jar', Jar) {
     def bundledJars = configurations.bundled
     inputs.files(bundledJars).withPropertyName('bundledJars')
     from({ bundledJars.collect { zipTree(it) } }) {
-        exclude 'META-INF/MANIFEST.MF'
+        exclude 'META-INF/MANIFEST.MF', 'META-INF/LICENSE' // the plugin's own jar has the license
     }
 }
