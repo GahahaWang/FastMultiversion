@@ -16,6 +16,12 @@ data class ModSettings(
     val versions: List<String>,
     /** The loaders, in [LOADERS] order. */
     val loaders: List<String>,
+    /**
+     * With several loaders, the main one: the common projects compile the shared code against Minecraft as its Gradle
+     * plugin sets it up (Loom, or ModDevGradle's NeoForm), and the mod's one file of access changes is in its format
+     * (a class tweaker, or an access transformer), which FastMultiversion converts for the other loader.
+     */
+    val mainLoader: String = "fabric",
 ) {
     /** The main class's simple name, from the mod name: `My Mod` → `MyMod`. */
     val modClass: String
@@ -34,6 +40,9 @@ data class ModSettings(
 
     val fabric: Boolean get() = "fabric" in loaders
     val neoforge: Boolean get() = "neoforge" in loaders
+
+    /** The common projects use ModDevGradle's NeoForm (NeoForge is the main loader) rather than Loom. */
+    val neoFormCommon: Boolean get() = common && mainLoader == "neoforge"
 
     companion object {
         val LOADERS = listOf("fabric", "neoforge")

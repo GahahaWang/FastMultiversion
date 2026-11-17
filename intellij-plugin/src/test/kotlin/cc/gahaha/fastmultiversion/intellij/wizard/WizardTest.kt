@@ -99,6 +99,10 @@ class WizardTest {
         assertEquals("26.3.0.1-beta", versions.neoforge["26.3"]) // a beta if that is all there is
         assertEquals("26.1.2.126", versions.neoforge["26.1.2"])
         assertEquals("0.155.3+26.1.2", versions.fabricApi["26.1.2"]) // not listed: the default
+        assertTrue(versions.neoform.isEmpty()) // Fabric is the main loader: no NeoForm
+
+        val neoform = VersionLookup { RESPONSES[it] }.resolve(settings.copy(mainLoader = "neoforge")).neoform
+        assertEquals(mapOf("26.1.2" to "26.1.2-1", "26.2" to "26.2-2", "26.3" to "26.3-1"), neoform) // not 26.3-rc-1-2
     }
 
     @Test
@@ -159,6 +163,11 @@ class WizardTest {
         assertTrue(settings, settings.contains("multiversion {\n    versions '26.1.2', '26.2', '26.3'\n    loaders 'fabric', 'neoforge'\n}"))
         assertTrue(dir.resolve("gradle/fabric/fabric.gradle").readText().startsWith("// The build script of every :<version>:fabric project;"))
         assertTrue(dir.resolve("src/fabric/resources/fabric.mod.json").readText().contains("\"com.example.testmod.fabric.TestModFabric\""))
+        // Fabric is the main loader: the common projects use Loom, and the one file of access changes is a class tweaker.
+        assertTrue(dir.resolve("gradle/common/common.gradle").readText().contains("net.fabricmc.fabric-loom"))
+        assertTrue(dir.resolve("src/main/resources/testmod.classtweaker").readText().startsWith("classTweaker v1 official\n# "))
+        assertFalse(dir.resolve("src/main/resources/META-INF/accesstransformer.cfg").exists())
+        assertTrue(dir.resolve("src/fabric/resources/fabric.mod.json").readText().contains("\"accessWidener\": \"testmod.classtweaker\","))
         val properties = dir.resolve("gradle.properties").readText()
         assertTrue(properties, properties.contains("mc.26.2.fabric_api=0.161.0+26.2"))
         assertTrue(properties, properties.contains("mc.26.1.2.range_fabric=>=26.1.2 <26.2"))
@@ -173,6 +182,27 @@ class WizardTest {
         )) {
             assertTrue(path, dir.resolve(path).exists())
         }
+        assertNoPlaceholders(dir)
+    }
+
+    @Test
+    fun generatesAProjectWithNeoForgeAsTheMainLoader() {
+        val settings = both.copy(projectName = "NeoForgeMain", versions = listOf("26.1.2", "26.3"), mainLoader = "neoforge")
+        val dir = sampleDir("NeoForgeMain")
+        val versions = VersionLookup { RESPONSES[it] }.resolve(settings)
+        ProjectGenerator.generate(dir, settings, versions, PluginRepository.MavenLocal(pluginVersion()))
+
+        // The common projects compile the shared code against NeoForm; the access changes are an access transformer.
+        val common = dir.resolve("gradle/common/common.gradle").readText()
+        assertTrue(common, common.contains("apply plugin: 'net.neoforged.moddev'") && common.contains("neoFormVersion = project.property(\"mc.\${multiversion.version}.neoform\")"))
+        val properties = dir.resolve("gradle.properties").readText()
+        assertTrue(properties, properties.contains("mc.26.3.neoform=26.3-1") && properties.contains("mc.26.1.2.neoform=26.1.2-1"))
+        val transformer = dir.resolve("src/main/resources/META-INF/accesstransformer.cfg").readText()
+        assertTrue(transformer, transformer.startsWith("# Access changes to Minecraft, for every loader and version: FastMultiversion gives Fabric"))
+        assertFalse(transformer, transformer.contains("@Mc.Is(\""))
+        assertFalse(dir.resolve("src/main/resources/testmod.classtweaker").exists())
+        // Fabric gets an access widener made from it.
+        assertTrue(dir.resolve("src/fabric/resources/fabric.mod.json").readText().contains("\"accessWidener\": \"testmod.accesswidener\","))
         assertNoPlaceholders(dir)
     }
 
@@ -249,6 +279,7 @@ class WizardTest {
             VersionLookup.FABRIC_LOADER to """[{"version":"0.21.0-beta","stable":false},{"version":"0.20.9","stable":true}]""",
             VersionLookup.FABRIC_API to metadata("0.161.0+26.2", "0.161.9+26.2", "0.161.10+26.2", "0.170.0+26.3", "0.170.1+26.4"),
             VersionLookup.NEOFORGE to metadata("26.2.0.93", "26.2.0.101", "26.2.0.110-beta", "26.1.2.126", "26.3.0.1-beta"),
+            VersionLookup.NEOFORM to metadata("26.1.2-1", "26.2-1", "26.2-2", "26.3-rc-1-2", "26.3-1"),
         )
 
         const val MANIFEST = """{"versions": [{"id": "26.3", "type": "release"}, {"id": "26.2", "type": "release"}]}"""

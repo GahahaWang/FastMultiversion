@@ -103,7 +103,10 @@ With the IntelliJ plugin installed, choose **File → New → Project…**, then
 - the mod ID, the mod name and the Java package;
 - the Minecraft versions: tick them in the list of every Minecraft version from 26.1 on, read from Mojang's
   version list. **Show snapshots** adds snapshots, pre-releases and release candidates;
-- the loaders: Fabric, NeoForge or both.
+- the loaders: Fabric, NeoForge or both. With both, the main loader: the common projects compile the shared code
+  against Minecraft as its Gradle plugin sets it up (Loom, or ModDevGradle's NeoForm), and the project starts with
+  one file of access changes in its format (`src/main/resources/<mod id>.classtweaker`, or
+  `src/main/resources/META-INF/accesstransformer.cfg`), which the other loader gets converted.
 
 The wizard creates the project described below, with a Gradle wrapper and a small mod for each loader, and
 imports it. With both loaders, shared code goes in `src/main` and each loader's in `src/<loader>`. With one loader,
@@ -251,6 +254,16 @@ apply plugin: 'net.fabricmc.fabric-loom'
 
 dependencies {
     minecraft "net.minecraft:minecraft:${multiversion.version}"
+}
+```
+
+With NeoForge as the main loader, ModDevGradle's NeoForm sets up Minecraft without a loader instead:
+
+```groovy
+apply plugin: 'net.neoforged.moddev'
+
+neoForge {
+    neoFormVersion = project.property("mc.${multiversion.version}.neoform")   // e.g. mc.26.3.neoform=26.3-1
 }
 ```
 

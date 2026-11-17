@@ -71,29 +71,32 @@ data class DependencyVersions(
     val fabricApi: Map<String, String?>,
     /** Per Minecraft version: NeoForge, e.g. `26.2.0.93`; `null` if none was found. */
     val neoforge: Map<String, String?>,
+    /** Per Minecraft version: NeoForm, for common projects on ModDevGradle, e.g. `26.2-2`; `null` if none was found. */
+    val neoform: Map<String, String?> = emptyMap(),
 ) {
     /** What could not be found, to tell the user. */
     fun missing(settings: ModSettings): List<String> = settings.versions.flatMap { version ->
         listOfNotNull(
             if (settings.fabric && fabricApi[version] == null) "Fabric API for Minecraft $version (mc.$version.fabric_api)" else null,
             if (settings.neoforge && neoforge[version] == null) "NeoForge for Minecraft $version (mc.$version.neoforge)" else null,
+            if (settings.neoFormCommon && neoform[version] == null) "NeoForm for Minecraft $version (mc.$version.neoform)" else null,
         )
     }
 }
 
 /**
- * Looks up the newest Fabric Loom, ModDevGradle and Fabric Loader (releases), and Fabric API and NeoForge for each
- * Minecraft version, from the loaders' Maven repositories. What it reads is kept in [cache]: without a network, the
- * versions come from what it read last time, and only before it ever read them from the defaults the plugin ships
- * (`fastmultiversion/template/defaults.properties`).
+ * Looks up the newest Fabric Loom, ModDevGradle and Fabric Loader (releases), and Fabric API, NeoForge and NeoForm
+ * for each Minecraft version, from the loaders' Maven repositories. What it reads is kept in [cache]: without a
+ * network, the versions come from what it read last time, and only before it ever read them from the defaults the
+ * plugin ships (`fastmultiversion/template/defaults.properties`).
  */
 class VersionLookup(private val cache: ResponseCache = ResponseCache.NONE, private val fetcher: Fetcher) {
     fun resolve(settings: ModSettings): DependencyVersions {
-        val loom = settings.fabric || settings.common
         val fabricApiVersions = if (settings.fabric) mavenVersions(FABRIC_API) else emptyList()
         val neoforgeVersions = if (settings.neoforge) mavenVersions(NEOFORGE) else emptyList()
+        val neoformVersions = if (settings.neoFormCommon) mavenVersions(NEOFORM) else emptyList()
         return DependencyVersions(
-            fabricLoom = (if (loom) newestRelease(mavenVersions(FABRIC_LOOM)) else null) ?: DEFAULTS.getProperty("fabric_loom"),
+            fabricLoom = (if (settings.fabric) newestRelease(mavenVersions(FABRIC_LOOM)) else null) ?: DEFAULTS.getProperty("fabric_loom"),
             modDevGradle = (if (settings.neoforge) newestRelease(mavenVersions(MOD_DEV_GRADLE)) else null) ?: DEFAULTS.getProperty("moddevgradle"),
             fabricLoader = (if (settings.fabric) latestFabricLoader() else null) ?: DEFAULTS.getProperty("fabric_loader"),
             fabricApi = settings.versions.associateWith { version ->
@@ -101,6 +104,9 @@ class VersionLookup(private val cache: ResponseCache = ResponseCache.NONE, priva
             },
             neoforge = settings.versions.associateWith { version ->
                 newestNeoForge(neoforgeVersions, version) ?: DEFAULTS.getProperty("mc.$version.neoforge")
+            },
+            neoform = if (!settings.neoFormCommon) emptyMap() else settings.versions.associateWith { version ->
+                newestNeoForm(neoformVersions, version) ?: DEFAULTS.getProperty("mc.$version.neoform")
             },
         )
     }
@@ -124,6 +130,7 @@ class VersionLookup(private val cache: ResponseCache = ResponseCache.NONE, priva
         const val FABRIC_LOADER = "https://meta.fabricmc.net/v2/versions/loader"
         const val FABRIC_API = "https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/maven-metadata.xml"
         const val NEOFORGE = "https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml"
+        const val NEOFORM = "https://maven.neoforged.net/releases/net/neoforged/neoform/maven-metadata.xml"
 
         /** The Gradle plugin markers: the versions of the plugin ids the build scripts apply. */
         const val FABRIC_LOOM = "https://maven.fabricmc.net/net/fabricmc/fabric-loom/net.fabricmc.fabric-loom.gradle.plugin/maven-metadata.xml"
@@ -139,6 +146,11 @@ class VersionLookup(private val cache: ResponseCache = ResponseCache.NONE, priva
         /** The newest release: no qualifier such as `-alpha.31` or `-beta`, e.g. `1.19.4` rather than `1.20.0-alpha.31`. */
         fun newestRelease(versions: List<String>): String? =
             versions.filter { '-' !in it }.maxWithOrNull(NUMBERS)
+
+        /** NeoForm builds are their Minecraft version and a build number: `26.2-2`, newer than `26.2-1`. */
+        fun newestNeoForm(versions: List<String>, minecraft: String): String? =
+            versions.filter { it.startsWith("$minecraft-") && it.substringAfter("$minecraft-").toIntOrNull() != null }
+                .maxByOrNull { it.substringAfter("$minecraft-").toInt() }
 
         /** Fabric API builds name their Minecraft version after a '+': `0.161.0+26.2`. */
         fun newestFabricApi(versions: List<String>, minecraft: String): String? =

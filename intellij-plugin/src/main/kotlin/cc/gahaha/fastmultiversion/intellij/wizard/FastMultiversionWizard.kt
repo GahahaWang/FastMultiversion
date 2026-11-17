@@ -61,6 +61,8 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
     private val snapshotsProperty = propertyGraph.property(false)
     private val fabricProperty = propertyGraph.property(true)
     private val neoforgeProperty = propertyGraph.property(true)
+    private val bothLoadersProperty = propertyGraph.lazyProperty { fabricProperty.get() && neoforgeProperty.get() }
+    private val mainLoaderProperty = propertyGraph.property("fabric")
 
     init {
         baseData?.let { base ->
@@ -68,6 +70,8 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             modNameProperty.dependsOn(base.nameProperty, deleteWhenModified = true) { base.name }
         }
         groupProperty.dependsOn(modIdProperty, deleteWhenModified = true) { "com.example." + modIdProperty.get() }
+        bothLoadersProperty.dependsOn(fabricProperty) { fabricProperty.get() && neoforgeProperty.get() }
+        bothLoadersProperty.dependsOn(neoforgeProperty) { fabricProperty.get() && neoforgeProperty.get() }
         versionList.setCheckBoxListListener { index, ticked -> versionList.getItemAt(index)?.let { versionChoice.tick(it, ticked) } }
         snapshotsProperty.afterChange { snapshots ->
             versionChoice.snapshots = snapshots
@@ -135,6 +139,11 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             checkBox("NeoForge").bindSelected(neoforgeProperty)
                 .validationOnApply { if (!fabricProperty.get() && !neoforgeProperty.get()) error("Choose at least one loader") else null }
         }
+        builder.row("Main loader:") {
+            segmentedButton(ModSettings.LOADERS) { text = LOADER_NAMES.getValue(it) }.bind(mainLoaderProperty)
+        }.visibleIf(bothLoadersProperty)
+            .rowComment("The shared code compiles against Minecraft as its Gradle plugin sets it up, and the mod's access changes "
+                + "are one file in its format (a class tweaker or an access transformer), converted for the other loader.")
     }
 
     override fun setupProject(project: Project) {
@@ -147,6 +156,7 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             group = groupProperty.get(),
             versions = ModSettings.parseVersions(versionChoice.chosen().joinToString(", ")).getOrThrow(),
             loaders = ModSettings.LOADERS.filter { (it == "fabric" && fabricProperty.get()) || (it == "neoforge" && neoforgeProperty.get()) },
+            mainLoader = mainLoaderProperty.get(),
         )
         val pluginVersion = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.version ?: "0.0.0-SNAPSHOT"
         val lookUp = ThrowableComputable<DependencyVersions, RuntimeException> { VersionLookup(CACHE, Fetcher(::readText)).resolve(settings) }
@@ -174,6 +184,7 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
         const val PLUGIN_ID = "cc.gahaha.fastmultiversion"
         const val NOTIFICATIONS = "FastMultiversion"
         const val USER_AGENT = "FastMultiversion IntelliJ plugin"
+        val LOADER_NAMES = mapOf("fabric" to "Fabric", "neoforge" to "NeoForge")
 
         fun readText(url: String): String? = try {
             HttpRequests.request(url).userAgent(USER_AGENT).connectTimeout(5000).readTimeout(15000).readString()

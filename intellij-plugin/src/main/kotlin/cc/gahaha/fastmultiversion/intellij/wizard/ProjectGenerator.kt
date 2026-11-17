@@ -56,8 +56,17 @@ object ProjectGenerator {
         write(".gitignore", "gitignore")
         val sources = settings.group.replace('.', '/')
         if (settings.common) {
-            write("gradle/common/common.gradle", "common.gradle")
+            write("gradle/common/common.gradle", if (settings.neoFormCommon) "common-neoforge.gradle" else "common.gradle")
             write("src/main/java/$sources/${settings.modClass}.java", "Mod.java")
+            // The one file of access changes, in the main loader's format; FastMultiversion converts it for the other.
+            if (settings.neoFormCommon) {
+                Files.createDirectories(dir.resolve("src/main/resources/META-INF"))
+                Files.writeString(dir.resolve("src/main/resources/META-INF/accesstransformer.cfg"), ACCESS_COMMENT.replace("{{other}}", "Fabric an access widener"))
+            } else {
+                Files.createDirectories(dir.resolve("src/main/resources"))
+                Files.writeString(dir.resolve("src/main/resources/${settings.modId}.classtweaker"),
+                    "classTweaker v1 official\n" + ACCESS_COMMENT.replace("{{other}}", "NeoForge an access transformer"))
+            }
             if (settings.fabric) {
                 write("gradle/fabric/fabric.gradle", "fabric.gradle", mapOf("projects" to ":<version>:fabric"))
                 write("src/fabric/java/$sources/fabric/${settings.modClass}Fabric.java", "ModFabric.java")
@@ -79,6 +88,14 @@ object ProjectGenerator {
         }
         copyWrapper(dir)
     }
+
+    /** The top of the file of access changes, without an `@Mc.Is` range of its own (the IDE checks those). */
+    private val ACCESS_COMMENT = """
+        |# Access changes to Minecraft, for every loader and version: FastMultiversion gives {{other}} made
+        |# from this file. To give an entry to some versions only, end it with a comment holding @Mc.Is and a version range,
+        |# as in code.
+        |
+    """.trimMargin()
 
     /**
      * The `multiversion` block of settings.gradle: with several loaders, a project per version and loader; with
@@ -103,7 +120,7 @@ object ProjectGenerator {
     }
 
     private fun values(settings: ModSettings, versions: DependencyVersions, plugin: PluginRepository): Map<String, String> {
-        val loom = settings.fabric || settings.common
+        val loom = settings.fabric
         val pluginRepositories = buildList {
             when (plugin) {
                 is PluginRepository.Published -> add("maven { url = \"${plugin.url}\" }   // FastMultiversion")
@@ -131,7 +148,16 @@ object ProjectGenerator {
                     add("mc.$version.neoforge=${versions.neoforge[version] ?: "UNKNOWN"}")
                     add("mc.$version.range_neoforge=${VersionLookup.neoforgeRange(version)}")
                 }
+                if (settings.neoFormCommon) {
+                    add("mc.$version.neoform=${versions.neoform[version] ?: "UNKNOWN"}")
+                }
             }.joinToString("\n")
+        }
+        // With several loaders, Fabric gets the access widener FastMultiversion makes, under this name.
+        val accessWidener = when {
+            !settings.common -> null
+            settings.neoFormCommon -> "${settings.modId}.accesswidener"
+            else -> "${settings.modId}.classtweaker"
         }
         return mapOf(
             "projectName" to settings.projectName,
@@ -148,6 +174,7 @@ object ProjectGenerator {
             // With one loader, the mod's own class is the entrypoint.
             "fabricEntrypoint" to if (settings.common) "${settings.group}.fabric.${settings.modClass}Fabric" else "${settings.group}.${settings.modClass}",
             "mcImport" to if (settings.versions.size > 1) "import cc.gahaha.fastmultiversion.Mc;\n" else "",
+            "accessWidenerEntry" to if (accessWidener == null) "" else "    \"accessWidener\": \"$accessWidener\",\n",
             "initBody" to initBody(settings),
         )
     }
