@@ -1,3 +1,9 @@
+## [1.1.1](https://github.com/GahahaWang/FastMultiversion/compare/v1.1.0...v1.1.1) (2026-11-17)
+
+### 🐛 Bug Fixes
+
+* Name the plugin's vendor Gahaha ([05bf099](https://github.com/GahahaWang/FastMultiversion/commit/05bf099457a26dc14ff7a52f09e3e7db01925e39))
+
 ## [1.1.0](https://github.com/GahahaWang/FastMultiversion/compare/v1.0.0...v1.1.0) (2026-11-17)
 
 ### ✨ New Features
