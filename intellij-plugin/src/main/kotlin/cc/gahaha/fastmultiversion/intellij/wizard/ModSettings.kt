@@ -22,6 +22,14 @@ data class ModSettings(
      * (a class tweaker, or an access transformer), which FastMultiversion converts for the other loader.
      */
     val mainLoader: String = "fabric",
+    /** The mod's license: fabric.mod.json, neoforge.mods.toml and the LICENSE file. */
+    val license: License = License.ALL_RIGHTS_RESERVED,
+    /** Optional: what the mod does, its authors and where it is on the web, for fabric.mod.json and neoforge.mods.toml. */
+    val description: String = "",
+    val authors: List<String> = emptyList(),
+    val website: String = "",
+    val repository: String = "",
+    val issueTracker: String = "",
 ) {
     /** The main class's simple name, from the mod name: `My Mod` → `MyMod`. */
     val modClass: String
@@ -49,6 +57,9 @@ data class ModSettings(
         private val MOD_ID = Regex("[a-z][a-z0-9_]{1,63}")
         private val PACKAGE = Regex("[a-z_][a-z0-9_]*(\\.[a-z_][a-z0-9_]*)*")
         private val OLDEST = McVersion.parse("26.1")
+
+        /** Authors from a comma-separated list: `Alex, Steve` → `Alex`, `Steve`. */
+        fun parseAuthors(text: String): List<String> = text.split(',').map { it.trim() }.filter { it.isNotEmpty() }
 
         /** A mod id from a project name: `My Mod` → `mymod`. */
         fun suggestModId(projectName: String): String {

@@ -106,7 +106,12 @@ With the IntelliJ plugin installed, choose **File → New → Project…**, then
 - the loaders: Fabric, NeoForge or both. With both, the main loader: the common projects compile the shared code
   against Minecraft as its Gradle plugin sets it up (Loom, or ModDevGradle's NeoForm), and the project starts with
   one file of access changes in its format (`src/main/resources/<mod id>.classtweaker`, or
-  `src/main/resources/META-INF/accesstransformer.cfg`), which the other loader gets converted.
+  `src/main/resources/META-INF/accesstransformer.cfg`), which the other loader gets converted;
+- the license, one of those the Minecraft Development plugin offers or CC BY 4.0: it goes into `fabric.mod.json`,
+  `neoforge.mods.toml` and a `LICENSE` file (with the year and the authors, or the mod's name);
+- under **Optional Settings**, the description, the authors (separated by commas), the website, the repository and
+  the issue tracker, for `fabric.mod.json` (`description`, `authors`, `contact`) and `neoforge.mods.toml`
+  (`description`, `authors`, `displayURL`, `issueTrackerURL`).
 
 The wizard creates the project described below, with a Gradle wrapper and a small mod for each loader, and
 imports it. With both loaders, shared code goes in `src/main` and each loader's in `src/<loader>`. With one loader,

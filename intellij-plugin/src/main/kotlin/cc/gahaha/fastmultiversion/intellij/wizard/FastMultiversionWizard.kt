@@ -18,6 +18,8 @@ import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.CheckBoxList
+import com.intellij.ui.dsl.builder.COLUMNS_LARGE
+import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.dsl.builder.RowLayout
 import com.intellij.util.ui.JBUI
@@ -63,6 +65,12 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
     private val neoforgeProperty = propertyGraph.property(true)
     private val bothLoadersProperty = propertyGraph.lazyProperty { fabricProperty.get() && neoforgeProperty.get() }
     private val mainLoaderProperty = propertyGraph.property("fabric")
+    private val licenseProperty = propertyGraph.property(License.ALL_RIGHTS_RESERVED)
+    private val descriptionProperty = propertyGraph.property("")
+    private val authorsProperty = propertyGraph.property("")
+    private val websiteProperty = propertyGraph.property("")
+    private val repositoryProperty = propertyGraph.property("")
+    private val issueTrackerProperty = propertyGraph.property("")
 
     init {
         baseData?.let { base ->
@@ -144,6 +152,16 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
         }.visibleIf(bothLoadersProperty)
             .rowComment("The shared code compiles against Minecraft as its Gradle plugin sets it up, and the mod's access changes "
                 + "are one file in its format (a class tweaker or an access transformer), converted for the other loader.")
+        builder.row("License:") {
+            comboBox(License.entries).bindItem(licenseProperty) // shown by their display names
+        }
+        builder.collapsibleGroup("Optional Settings") {
+            row("Description:") { textField().bindText(descriptionProperty).columns(COLUMNS_LARGE) }
+            row("Authors:") { textField().bindText(authorsProperty).columns(COLUMNS_LARGE).comment("Separated by commas") }
+            row("Website:") { textField().bindText(websiteProperty).columns(COLUMNS_LARGE) }
+            row("Repository:") { textField().bindText(repositoryProperty).columns(COLUMNS_LARGE) }
+            row("Issue tracker:") { textField().bindText(issueTrackerProperty).columns(COLUMNS_LARGE) }
+        }
     }
 
     override fun setupProject(project: Project) {
@@ -157,6 +175,12 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             versions = ModSettings.parseVersions(versionChoice.chosen().joinToString(", ")).getOrThrow(),
             loaders = ModSettings.LOADERS.filter { (it == "fabric" && fabricProperty.get()) || (it == "neoforge" && neoforgeProperty.get()) },
             mainLoader = mainLoaderProperty.get(),
+            license = licenseProperty.get(),
+            description = descriptionProperty.get(),
+            authors = ModSettings.parseAuthors(authorsProperty.get()),
+            website = websiteProperty.get(),
+            repository = repositoryProperty.get(),
+            issueTracker = issueTrackerProperty.get(),
         )
         val pluginVersion = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.version ?: "0.0.0-SNAPSHOT"
         val lookUp = ThrowableComputable<DependencyVersions, RuntimeException> { VersionLookup(CACHE, Fetcher(::readText)).resolve(settings) }

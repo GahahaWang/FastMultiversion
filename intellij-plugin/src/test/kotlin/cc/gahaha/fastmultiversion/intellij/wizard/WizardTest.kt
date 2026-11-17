@@ -186,6 +186,48 @@ class WizardTest {
     }
 
     @Test
+    fun writesTheLicenseAndTheOptionalSettings() {
+        // By default: All Rights Reserved, held by the mod; no optional settings.
+        val plain = sampleDir("Plain")
+        ProjectGenerator.generate(plain, both, VersionLookup { null }.resolve(both), PluginRepository.Published("1.0.0"))
+        val year = java.time.Year.now().value
+        assertEquals("Copyright (c) $year Test Mod\nAll rights reserved.\n", plain.resolve("LICENSE").readText())
+        val plainJson = plain.resolve("src/fabric/resources/fabric.mod.json").readText()
+        assertTrue(plainJson, plainJson.contains("\"description\": \"\",\n    \"authors\": [],\n    \"license\": \"All-Rights-Reserved\","))
+        assertFalse(plainJson, plainJson.contains("contact"))
+        val plainToml = plain.resolve("src/neoforge/resources/META-INF/neoforge.mods.toml").readText()
+        assertTrue(plainToml, plainToml.contains("license = \"All-Rights-Reserved\"\n\n[[mods]]"))
+        assertTrue(plainToml, plainToml.contains("displayName = \"Test Mod\"\ndescription = \"Test Mod\"\n"))
+
+        // Chosen ones, with text that JSON, TOML and the build's template expansion all need escaped.
+        val settings = both.copy(projectName = "Licensed", license = License.MIT, description = "Counts \"entities\" for \$5 \\ more",
+            authors = ModSettings.parseAuthors(" Alex,  Steve ,"), website = "https://example.com", repository = "https://github.com/example/mod",
+            issueTracker = "https://github.com/example/mod/issues")
+        val dir = sampleDir("Licensed")
+        ProjectGenerator.generate(dir, settings, VersionLookup { null }.resolve(settings), PluginRepository.Published("1.0.0"))
+
+        assertTrue(dir.resolve("LICENSE").readText().startsWith("The MIT License (MIT)\n\nCopyright (c) $year Alex, Steve\n"))
+        val json = dir.resolve("src/fabric/resources/fabric.mod.json").readText()
+        for (line in listOf(
+            "\"description\": \"Counts \\\\\"entities\\\\\" for \\\$5 \\\\\\\\ more\",",
+            "\"authors\": [\"Alex\", \"Steve\"],",
+            "\"contact\": {\n        \"homepage\": \"https://example.com\",\n        \"sources\": \"https://github.com/example/mod\",\n"
+                + "        \"issues\": \"https://github.com/example/mod/issues\"\n    },\n    \"license\": \"MIT\",",
+        )) {
+            assertTrue(line + "\n" + json, json.contains(line))
+        }
+        val toml = dir.resolve("src/neoforge/resources/META-INF/neoforge.mods.toml").readText()
+        for (line in listOf("license = \"MIT\"\nissueTrackerURL = \"https://github.com/example/mod/issues\"\n",
+            "displayURL = \"https://example.com\"\nauthors = \"Alex, Steve\"\ndescription = \"Counts \\\\\"entities\\\\\" for \\\$5 \\\\\\\\ more\"\n")) {
+            assertTrue(line + "\n" + toml, toml.contains(line))
+        }
+        for (license in License.entries) {
+            assertFalse(license.id, license.text("Alex").contains("{{"))
+        }
+        assertTrue(License.CC_BY_4.text("Alex", 2026).startsWith("Copyright (c) 2026 Alex\n\nAttribution 4.0 International\n"))
+    }
+
+    @Test
     fun generatesAProjectWithNeoForgeAsTheMainLoader() {
         val settings = both.copy(projectName = "NeoForgeMain", versions = listOf("26.1.2", "26.3"), mainLoader = "neoforge")
         val dir = sampleDir("NeoForgeMain")

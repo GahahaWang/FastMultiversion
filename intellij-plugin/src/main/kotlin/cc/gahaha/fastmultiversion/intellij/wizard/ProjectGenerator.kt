@@ -54,6 +54,7 @@ object ProjectGenerator {
         write("build.gradle", "build.gradle")
         write("gradle.properties", "gradle.properties")
         write(".gitignore", "gitignore")
+        Files.writeString(dir.resolve("LICENSE"), settings.license.text(settings.authors.joinToString(", ").ifEmpty { settings.modName }))
         val sources = settings.group.replace('.', '/')
         if (settings.common) {
             write("gradle/common/common.gradle", if (settings.neoFormCommon) "common-neoforge.gradle" else "common.gradle")
@@ -175,6 +176,19 @@ object ProjectGenerator {
             "fabricEntrypoint" to if (settings.common) "${settings.group}.fabric.${settings.modClass}Fabric" else "${settings.group}.${settings.modClass}",
             "mcImport" to if (settings.versions.size > 1) "import cc.gahaha.fastmultiversion.Mc;\n" else "",
             "accessWidenerEntry" to if (accessWidener == null) "" else "    \"accessWidener\": \"$accessWidener\",\n",
+            // fabric.mod.json and neoforge.mods.toml: the license and the optional settings.
+            "licenseId" to settings.license.id,
+            "modNameJson" to quoted(settings.modName),
+            "descriptionJson" to quoted(settings.description.trim()),
+            "authorsJson" to settings.authors.joinToString(", ", "[", "]") { quoted(it) },
+            "contactEntry" to contactEntry(settings),
+            "modNameToml" to quoted(settings.modName),
+            "descriptionToml" to quoted(settings.description.trim().ifEmpty { settings.modName }),
+            "issueTrackerEntry" to if (settings.issueTracker.isBlank()) "" else "issueTrackerURL = ${quoted(settings.issueTracker.trim())}\n",
+            "modLinksEntry" to buildString {
+                if (settings.website.isNotBlank()) append("displayURL = ${quoted(settings.website.trim())}\n")
+                if (settings.authors.isNotEmpty()) append("authors = ${quoted(settings.authors.joinToString(", "))}\n")
+            },
             "initBody" to initBody(settings),
         )
     }
@@ -198,6 +212,36 @@ object ProjectGenerator {
 
     private fun escape(text: String): String = text.replace("\\", "\\\\").replace("\"", "\\\"")
 
+    /** fabric.mod.json's `contact`, with what the optional settings give: website, repository, issue tracker. */
+    private fun contactEntry(settings: ModSettings): String {
+        val contact = listOf("homepage" to settings.website, "sources" to settings.repository, "issues" to settings.issueTracker)
+            .filter { it.second.isNotBlank() }
+        if (contact.isEmpty()) {
+            return ""
+        }
+        return "    \"contact\": {\n" + contact.joinToString(",\n") { (key, value) -> "        \"$key\": ${quoted(value.trim())}" } + "\n    },\n"
+    }
+
+    /**
+     * [text] as a string of fabric.mod.json or neoforge.mods.toml, which the build expands as Groovy templates
+     * (`processResources { expand(...) }`): escaped as a JSON and TOML string, and then `\` and `$` for the template.
+     */
+    internal fun quoted(text: String): String {
+        val escaped = buildString {
+            for (c in text) {
+                when (c) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> if (c < ' ') append("\\u%04x".format(c.code)) else append(c)
+                }
+            }
+        }
+        return "\"" + escaped.replace("\\", "\\\\").replace("$", "\\$") + "\""
+    }
+
     /** The wrapper this plugin was built with: gradlew, gradlew.bat and gradle/wrapper. */
     private fun copyWrapper(dir: Path) {
         for (path in listOf("gradlew", "gradlew.bat", "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties")) {
@@ -208,8 +252,9 @@ object ProjectGenerator {
         dir.resolve("gradlew").toFile().setExecutable(true)
     }
 
+    /** A template, with LF line ends also where the plugin was built from a checkout with CRLF ones. */
     private fun template(name: String): String =
-        resource("/fastmultiversion/template/$name.tmpl").use { String(it.readAllBytes(), Charsets.UTF_8) }
+        resource("/fastmultiversion/template/$name.tmpl").use { String(it.readAllBytes(), Charsets.UTF_8).replace("\r\n", "\n") }
 
     private fun resource(path: String) =
         ProjectGenerator::class.java.getResourceAsStream(path) ?: throw IllegalStateException("missing resource $path")
