@@ -1,5 +1,6 @@
 package cc.gahaha.fastmultiversion.gradle;
 
+import cc.gahaha.fastmultiversion.versioning.McVersion;
 import java.io.File;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -21,7 +22,9 @@ import org.gradle.api.tasks.compile.JavaCompile;
  *   <li>adds {@code Mc}/{@code @Mc.Is} to the compile classpath and the javac plugin to the processor path,</li>
  *   <li>runs javac with {@code -Xplugin:"FastMultiversion target=<version> apidb=..."} in a forked compiler
  *       with the exports the plugin needs,</li>
- *   <li>records this version's API ({@code generateVersionApi}) for the root project's database.</li>
+ *   <li>records this version's API ({@code generateVersionApi}) for the root project's database,</li>
+ *   <li>keeps only this version's lines of access wideners, class tweakers and access transformers
+ *       ({@link VersionedFiles}).</li>
  * </ul>
  * During IntelliJ's Gradle sync only the active version gets the shared sources, because IntelliJ puts a
  * source directory in one module only; the IDE then shows the code as the active version sees it. With
@@ -72,6 +75,10 @@ public abstract class MultiversionVersionPlugin implements Plugin<Project> {
             common.setTransitive(false);
             project.getDependencies().add(JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME, common);
         }
+
+        VersionedFiles versioned = new VersionedFiles(project, McVersion.parse(version.getVersion()), loader, version.isCommon());
+        version.setVersionedFiles(versioned);
+        versioned.apply();
 
         project.getDependencies().add(JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME, project.files(libraries.api()));
         project.getDependencies().add(JavaPlugin.ANNOTATION_PROCESSOR_CONFIGURATION_NAME, project.files(libraries.processorPath()));

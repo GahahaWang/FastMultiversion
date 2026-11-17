@@ -19,6 +19,8 @@ dependencies {
     implementation project(':apidb-generator')
     implementation project(':apidb')
     implementation project(':versioning')
+    // Reads Minecraft's classes to turn access transformer entries into access widener ones.
+    implementation 'org.ow2.asm:asm:9.11.1'
 
     embeddedProcessor project(':javac-plugin')
     embeddedApi project(':annotations')

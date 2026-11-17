@@ -2,6 +2,7 @@ package cc.gahaha.fastmultiversion.gradle;
 
 import cc.gahaha.fastmultiversion.versioning.McVersion;
 import cc.gahaha.fastmultiversion.versioning.VersionRange;
+import java.io.File;
 import java.util.List;
 
 /**
@@ -22,6 +23,7 @@ public class MultiversionVersionExtension {
     private final boolean active;
     private final boolean activeLoader;
     private final List<McVersion> versions;
+    private VersionedFiles files;
 
     public MultiversionVersionExtension(McVersion version, String loader, boolean common, boolean active,
                                         boolean activeLoader, List<McVersion> versions) {
@@ -66,6 +68,29 @@ public class MultiversionVersionExtension {
     /** Whether this project's version is in {@code range}, using the same syntax as {@code Mc.is}. */
     public boolean is(String range) {
         return VersionRange.parse(range).contains(version);
+    }
+
+    /**
+     * This version's copy of an access widener, class tweaker or access transformer: without the lines whose
+     * {@code # @Mc.Is("...")} comment excludes this version. A string is a path relative to the root directory
+     * (where {@code src/} is). Loom's {@code accessWidenerPath} and ModDevGradle's access transformers are such
+     * copies by default; this is for build scripts that set them themselves:
+     *
+     * <pre>
+     * loom {
+     *     accessWidenerPath = multiversion.versioned('src/fabric/resources/mymod.classtweaker')
+     * }
+     * </pre>
+     */
+    public File versioned(Object path) {
+        if (files == null) {
+            throw new IllegalStateException("multiversion.versioned is not available before the version project is set up");
+        }
+        return files.versioned(files.resolve(path));
+    }
+
+    void setVersionedFiles(VersionedFiles files) {
+        this.files = files;
     }
 
     @Override

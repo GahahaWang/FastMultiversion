@@ -260,6 +260,144 @@ class MultiversionPluginTest {
         assertTrue(output.contains("with several loaders, add common.gradle"), output);
     }
 
+    @Test
+    void writesAccessChangesOnceForEveryLoader() throws Exception {
+        Path project = syntheticProject("access");
+        TestCompiler.jar(project.resolve("libs"), "holder", "package mc; public class Holder { private int count; private void reset() {} }");
+        write(project.resolve("settings.gradle"), """
+                plugins { id 'cc.gahaha.fastmultiversion' }
+                rootProject.name = 'accessmod'
+                multiversion {
+                    versions '26.1', '26.2'
+                    loaders 'fabric', 'neoforge'
+                }
+                """);
+        // Stand-ins for Loom (with Minecraft's jars, which an access widener made from an access transformer needs) and
+        // ModDevGradle (whose own default is META-INF/accesstransformer.cfg in the resource directories).
+        write(project.resolve("buildSrc/build.gradle"), """
+                plugins { id 'java-gradle-plugin' }
+                gradlePlugin {
+                    plugins {
+                        loom { id = 'net.fabricmc.fabric-loom'; implementationClass = 'FakeLoom' }
+                        modDev { id = 'net.neoforged.moddev'; implementationClass = 'FakeModDev' }
+                    }
+                }
+                """);
+        write(project.resolve("buildSrc/src/main/java/FakeLoom.java"), """
+                import java.nio.file.Path;
+                import java.util.List;
+                import javax.inject.Inject;
+                import org.gradle.api.Plugin;
+                import org.gradle.api.Project;
+                import org.gradle.api.file.RegularFileProperty;
+                public class FakeLoom implements Plugin<Project> {
+                    public static class MinecraftProvider {
+                        private final List<Path> jars;
+                        MinecraftProvider(List<Path> jars) { this.jars = jars; }
+                        public List<Path> getMinecraftJars() { return jars; }
+                    }
+                    public static abstract class Extension {
+                        private final Project project;
+                        @Inject public Extension(Project project) { this.project = project; }
+                        public abstract RegularFileProperty getAccessWidenerPath();
+                        public MinecraftProvider getMinecraftProvider() {
+                            String version = project.getExtensions().getByName("multiversion").toString();
+                            return new MinecraftProvider(List.of(project.getRootProject().file("libs/mc-" + version + ".jar").toPath(),
+                                    project.getRootProject().file("libs/holder.jar").toPath()));
+                        }
+                    }
+                    public void apply(Project project) { project.getExtensions().create("loom", Extension.class, project); }
+                }
+                """);
+        write(project.resolve("buildSrc/src/main/java/FakeModDev.java"), """
+                import javax.inject.Inject;
+                import org.gradle.api.Plugin;
+                import org.gradle.api.Project;
+                import org.gradle.api.file.ConfigurableFileCollection;
+                import org.gradle.api.model.ObjectFactory;
+                public class FakeModDev implements Plugin<Project> {
+                    public static abstract class DataFiles { public abstract ConfigurableFileCollection getFiles(); }
+                    public static abstract class Extension {
+                        private final DataFiles accessTransformers;
+                        @Inject public Extension(ObjectFactory objects) { accessTransformers = objects.newInstance(DataFiles.class); }
+                        public DataFiles getAccessTransformers() { return accessTransformers; }
+                    }
+                    public void apply(Project project) {
+                        Extension extension = project.getExtensions().create("neoForge", Extension.class);
+                        extension.getAccessTransformers().getFiles().convention(project.provider(() ->
+                                project.getRootProject().file("src/main/resources/META-INF/accesstransformer.cfg")));
+                    }
+                }
+                """);
+        String compile = "dependencies { compileOnly files(rootProject.file(\"libs/mc-${multiversion.version}.jar\")) }\n";
+        // The common projects use ModDevGradle, as with NeoForge as the main loader.
+        write(project.resolve("common.gradle"), compile + """
+                apply plugin: 'net.neoforged.moddev'
+                println "COMMON ${multiversion.version} ${neoForge.accessTransformers.files.files.collect { it.text.replace('\\n', '|') }}"
+                """);
+        write(project.resolve("fabric.gradle"), compile + """
+                apply plugin: 'net.fabricmc.fabric-loom'
+                println "AW ${multiversion.version} ${loom.accessWidenerPath.get().asFile.name} ${loom.accessWidenerPath.get().asFile.text.replace('\\n', '|')}"
+                """);
+        write(project.resolve("neoforge.gradle"), compile + """
+                apply plugin: 'net.neoforged.moddev'
+                println "AT ${multiversion.version} ${neoForge.accessTransformers.files.files.collect { it.text.replace('\\n', '|') }}"
+                println "VERSIONED ${multiversion.version} ${multiversion.versioned('src/main/resources/accessmod.classtweaker').text.replace('\\n', '|')}"
+                """);
+        // Written once, for every loader, in both formats; the loaders' own files add to it.
+        write(project.resolve("src/main/resources/accessmod.classtweaker"), """
+                classTweaker v1 official
+                accessible class mc/OldThing  # @Mc.Is("[26.1,26.2)")
+                accessible class mc/NewThing  # @Mc.Is("[26.2,)")
+                accessible method mc/Registry of (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;  # @Mc.Is("26.2")
+                """);
+        write(project.resolve("src/main/resources/META-INF/accesstransformer.cfg"), """
+                public-f mc.Holder count
+                """);
+        write(project.resolve("src/neoforge/resources/META-INF/accesstransformer.cfg"), """
+                public mc.Holder reset()V
+                """);
+        write(project.resolve("src/fabric/resources/fabric.mod.json"), """
+                {"schemaVersion": 1, "id": "accessmod", "accessWidener": "accessmod.classtweaker"}
+                """);
+
+        String made = "# Made by FastMultiversion for Minecraft %s from src/main/resources/META-INF/accesstransformer.cfg, "
+                + "src/main/resources/accessmod.classtweaker%s; changes there, not here.|";
+        String widener26_1 = "classTweaker v1 official|" + made.formatted("26.1", "")
+                + "accessible field mc/Holder count I|mutable field mc/Holder count I|accessible class mc/OldThing|";
+        String widener26_2 = "classTweaker v1 official|" + made.formatted("26.2", "") + "accessible field mc/Holder count I|"
+                + "mutable field mc/Holder count I|accessible class mc/NewThing|"
+                + "accessible method mc/Registry of (Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;|";
+        String transformer26_2 = made.formatted("26.2", ", src/neoforge/resources/META-INF/accesstransformer.cfg")
+                + "public-f mc.Holder count|public mc.NewThing|public mc.Registry of(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;|"
+                + "public mc.Holder reset()V|";
+        // Also in an IDE sync, where only the active version (26.2) gets the shared resources as a source directory: the
+        // IDE resolves the other versions against their Minecraft as the build applies its access changes.
+        for (String sync : List.of("-Didea.sync.active=false", "-Didea.sync.active=true")) {
+            String output = gradle(project, "help", sync).build().getOutput();
+            for (String line : List.of("AW 26.1 accessmod.classtweaker " + widener26_1, "AW 26.2 accessmod.classtweaker " + widener26_2,
+                    "AT 26.2 [" + transformer26_2 + "]", "COMMON 26.1 [" + made.formatted("26.1", "") + "public-f mc.Holder count|public mc.OldThing|]",
+                    "VERSIONED 26.1 classTweaker v1 official|accessible class mc/OldThing  # @Mc.Is(\"[26.1,26.2)\")|")) {
+                assertTrue(output.contains(line), sync + ": " + line + "\n" + output);
+            }
+        }
+
+        // Each jar gets its loader's format only.
+        gradle(project, ":26.1:fabric:processResources", ":26.2:fabric:processResources", ":26.2:neoforge:processResources").build();
+        Path fabric = project.resolve("versions/26.2/fabric/build/resources/main");
+        assertEquals(widener26_2.replace('|', '\n'), Files.readString(fabric.resolve("accessmod.classtweaker")));
+        assertFalse(Files.exists(fabric.resolve("META-INF/accesstransformer.cfg")));
+        Path neoforge = project.resolve("versions/26.2/neoforge/build/resources/main");
+        assertEquals(transformer26_2.replace('|', '\n'), Files.readString(neoforge.resolve("META-INF/accesstransformer.cfg")));
+        assertFalse(Files.exists(neoforge.resolve("accessmod.classtweaker")));
+
+        // A range that is not valid stops the build, with where it is.
+        Files.writeString(project.resolve("src/main/resources/accessmod.classtweaker"), "accessible class mc/Registry  # @Mc.Is(\"[26.2\")\n",
+                StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.APPEND);
+        String failure = gradle(project, "help").buildAndFail().getOutput();
+        assertTrue(failure.contains("accessmod.classtweaker:5: version range '[26.2' is missing ']' or ')'"), failure);
+    }
+
     private static String runEntry(Path project, String version, String loader, Path... runtime) throws Exception {
         List<URL> urls = new ArrayList<>();
         urls.add(project.resolve("versions/" + version + "/" + loader + "/build/classes/java/main").toUri().toURL());
