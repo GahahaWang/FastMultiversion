@@ -4,7 +4,10 @@
 #                   plugin is built against IntelliJ IDEA downloaded from JetBrains and uploaded as an
 #                   artifact. Tests that need Minecraft jars from a local Loom cache are skipped. For a push to
 #                   dev, it also looks for a commit message that asks to merge into master ("merge to master" or
-#                   "合併到 master", in any case).
+#                   "合併到 master", in any case). It is the only job that saves Gradle's caches (the others
+#                   read them): not the unpacked IntelliJ IDEA (1.5 GB and a bit different each run, so a new
+#                   entry every time; unpacking it again from its cached download is quicker), nor files no build
+#                   used.
 #
 # prerelease        After a push to dev that does not ask to merge (or a manual run on dev): semantic-release
 #                   (release.config.cjs) publishes a pre-release of the next version, x.y.z-dev.n, if the
@@ -69,6 +72,9 @@ jobs:
           java-version: 25
 
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-home-cache-excludes: caches/*/transforms
+          cache-cleanup: on-success
 
       - name: Build and test
         run: ./gradlew build :intellij-plugin:buildPlugin
@@ -114,6 +120,8 @@ jobs:
           java-version: 25
 
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
 
       - uses: actions/setup-node@v7
         with:
@@ -188,6 +196,8 @@ jobs:
           java-version: 25
 
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
 
       - uses: actions/setup-node@v7
         with:
