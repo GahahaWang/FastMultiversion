@@ -14,11 +14,12 @@
 #                   IntelliJ plugin. Nothing is committed: gradle.properties keeps the last release's version.
 #
 # merge-to-master   After a push to dev that asks to merge: merges dev into master, then runs this workflow on
-#                   master (a push with the workflow's own token would not start it).
+#                   master (a push with the workflow's own token would not start it). If master is then what the
+#                   build job just built and tested on dev, it says so (input built), and that run skips the build.
 #
-# release           On master (the run started by merge-to-master, a push, or a manual run): semantic-release
-#                   publishes the release x.y.z like a pre-release, but also commits the version and
-#                   CHANGELOG.md to master; then merges master back into dev.
+# release           On master (the run started by merge-to-master, a push, or a manual run), once the build passed
+#                   or was skipped: semantic-release publishes the release x.y.z like a pre-release, but also
+#                   commits the version and CHANGELOG.md to master; then merges master back into dev.
 #
 # pages             After a release or pre-release (or a manual run): writes the site from all releases
 #                   (.github/scripts/pages.py) to the gh-pages branch, which GitHub Pages serves:
@@ -33,12 +34,19 @@ on:
   pull_request:
     branches: [dev]
   workflow_dispatch:
+    inputs:
+      built:
+        description: The commit of dev whose build and tests passed and whose files master has now (skips the build)
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
   build:
+    # Not again on master when merge-to-master brought it exactly the files of a dev commit that passed.
+    if: ${{ !inputs.built }}
     runs-on: ubuntu-latest
     outputs:
       merge: ${{ steps.request.outputs.merge }}
@@ -134,22 +142,31 @@ jobs:
           fetch-depth: 0
 
       - name: Merge dev into master
+        id: merge
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git checkout -q -B master origin/master
           git merge --no-edit -m "Merge dev into master" "$GITHUB_SHA"
           git push -q origin master
+          # The build job built and tested $GITHUB_SHA: if master now has exactly its files, that holds for master.
+          if git diff --quiet "$GITHUB_SHA" HEAD; then
+            echo "built=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Release from master
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh workflow run build.yml --ref master
+          BUILT: ${{ steps.merge.outputs.built }}
+        run: gh workflow run build.yml --ref master -f built="$BUILT"
 
   release:
     needs: build
-    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    # Also when the build was skipped (see the build job), but not when it failed.
+    if: >-
+      !cancelled() && !failure()
+      && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
