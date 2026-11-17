@@ -1,0 +1,8 @@
+<!-- Loaded when the Minecraft Development plugin is installed: it opens access wideners and class tweakers as
+     "Class Tweaker" and access transformers named *_at.cfg as "Access Transformers". -->
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <annotator language="Class Tweaker" implementationClass="cc.gahaha.fastmultiversion.intellij.AccessFileAnnotator"/>
+        <annotator language="Access Transformers" implementationClass="cc.gahaha.fastmultiversion.intellij.AccessFileAnnotator"/>
+    </extensions>
+</idea-plugin>

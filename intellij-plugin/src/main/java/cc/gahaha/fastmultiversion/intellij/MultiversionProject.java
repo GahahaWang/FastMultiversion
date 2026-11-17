@@ -24,8 +24,10 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
 
@@ -103,6 +105,7 @@ public final class MultiversionProject {
     private long dbStamp = -1;
     /** The info file's stamp when the database was found missing and its generation started. */
     private long missingDatabaseFor = -1;
+    private final Map<String, LoaderDatabase> loaderDatabases = new ConcurrentHashMap<>();
 
     public MultiversionProject(Project project) {
         this.project = project;
@@ -205,6 +208,37 @@ public final class MultiversionProject {
             restartHighlighting();
         }
         return state;
+    }
+
+    /**
+     * The API database of {@code loader}'s version projects ({@code build/multiversion/<loader>/api.mcapi}), e.g. for
+     * the access transformers NeoForge applies; the setup's own database if the mod has no such loader or the file
+     * is missing. Read again when the file changes.
+     */
+    ApiDatabase database(State state, String loader) {
+        Path base = state.layout().base();
+        if (base == null || !state.layout().loaders().contains(loader)) {
+            return state.db();
+        }
+        Path file = base.resolve("build/multiversion/" + loader + "/api.mcapi");
+        try {
+            if (!Files.isRegularFile(file)) {
+                return state.db();
+            }
+            long stamp = Files.getLastModifiedTime(file).toMillis();
+            LoaderDatabase loaded = loaderDatabases.get(loader);
+            if (loaded == null || loaded.stamp() != stamp) {
+                loaded = new LoaderDatabase(stamp, ApiDatabase.read(file));
+                loaderDatabases.put(loader, loaded);
+            }
+            return loaded.db();
+        } catch (IOException | RuntimeException e) {
+            LOG.warn("cannot load the " + loader + " API database " + file, e);
+            return state.db();
+        }
+    }
+
+    private record LoaderDatabase(long stamp, ApiDatabase db) {
     }
 
     private void restartHighlighting() {

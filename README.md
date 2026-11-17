@@ -192,6 +192,7 @@ one version. The `multiversion` object describes the project being configured:
 | `multiversion.active` | Whether this is the version and loader the IDE works with |
 | `multiversion.versions` | All versions |
 | `multiversion.is('[26.2,)')` | Whether this project's version is in the range |
+| `multiversion.versioned('src/fabric/resources/mymod.classtweaker')` | This version's copy of an access widener, class tweaker or access transformer (see [Access wideners, class tweakers and access transformers](#access-wideners-class-tweakers-and-access-transformers)) |
 
 ```groovy
 apply plugin: 'net.fabricmc.fabric-loom'
@@ -347,6 +348,70 @@ return DataManager.getRenderLayerRange().isPositionWithinRange(pos);
 
 Storing the result in a variable of the class, or passing it on, still needs `Mc.is`: written down, the class
 is another one in each version.
+
+### Access wideners, class tweakers and access transformers
+
+To give an entry to some versions only, end it with a comment that holds `@Mc.Is` and a range. Entries
+without one are for every version:
+
+```text
+classTweaker v1 official
+accessible method net/minecraft/world/level/block/RedStoneWireBlock isDot (Lnet/minecraft/world/level/block/state/BlockState;)Z  # @Mc.Is("[26.1.2,26.3)")
+accessible method net/minecraft/world/level/block/RedstoneWireBlock isDot (Lnet/minecraft/world/level/block/state/BlockState;)Z  # @Mc.Is("[26.3,)")
+```
+
+```text
+public net.minecraft.world.level.block.RedStoneWireBlock isDot(Lnet/minecraft/world/level/block/state/BlockState;)Z # @Mc.Is("[26.1.2,26.3)")
+public net.minecraft.world.level.block.RedstoneWireBlock isDot(Lnet/minecraft/world/level/block/state/BlockState;)Z # @Mc.Is("[26.3,)")
+```
+
+This works in `*.accesswidener`, `*.classtweaker`, `accesstransformer*.cfg` and `*_at.cfg` files among the resources:
+`src/main/resources`, `src/<loader>/resources` or a version's own `versions/<version>/<loader>/src/main/resources`.
+
+**Write the access changes once, in either format.** Each project gets all the files it sees, made into the format
+its loader's Gradle plugin reads, and applies them to Minecraft with only its version's lines:
+
+- **Loom** (Fabric, or common projects on Loom): `accessWidenerPath` is an access widener made from them all. The
+  jar gets it under the name `fabric.mod.json` gives in `"accessWidener"`.
+- **ModDevGradle** (NeoForge, or common projects on NeoForm): its access transformers are an access transformer
+  made from them all. The jar gets it as `META-INF/accesstransformer.cfg`, which NeoForge reads by default.
+
+The files themselves stay out of the jars. With several loaders, keep the file in `src/main/resources`: the common
+projects (see [common.gradle](#commongradle)) and every loader then get it. Entries that only one loader needs can
+go in `src/<loader>/resources`; they are added to that loader's.
+
+| Access widener / class tweaker | Access transformer |
+| --- | --- |
+| `accessible class/method/field` | `public` |
+| `extendable class` | `public-f` |
+| `extendable method` | `protected-f` |
+| `mutable field` | `private-f` (an access transformer only widens access, so `private` keeps it) |
+| `inject-interface`, `extend-enum` | none: left out, with a warning |
+| `accessible` (an access widener has no protected) | `protected` |
+| none: left out, with a warning | `default`, `private` without `-f`, `+f` |
+
+An access transformer names a field without its type, and `*` and `*()` stand for every field or method of a class;
+an access widener names each member with its descriptor. FastMultiversion reads those from Minecraft's classes, as
+Loom has them.
+
+To set Loom's or ModDevGradle's file yourself instead, use `multiversion.versioned`, whose path is relative to the
+root directory. It filters only that file, for the version:
+
+```groovy
+loom {
+    accessWidenerPath = multiversion.versioned('src/fabric/resources/mymod.classtweaker')
+}
+```
+
+Loom's `check` task (part of `build`) fails on an entry whose class or member a version lacks; ModDevGradle
+checks access transformers only with `validateAccessTransformers`. With the IntelliJ plugin:
+
+- An entry whose target is missing in some of its versions is reported as you type (for access transformers as a
+  warning), with a fix that adds the range of the versions that have it. A range that is not valid, or matches no
+  version, is reported on any line, as the build reads them all.
+- `@Mc.Is`, its parentheses and the range get your color scheme's colors for a Java annotation, parentheses and
+  string. Without the Minecraft Development plugin, the files open as text, and comments get the color of a Java
+  comment.
 
 ## Building
 

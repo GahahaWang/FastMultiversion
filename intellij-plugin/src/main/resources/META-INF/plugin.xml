@@ -21,6 +21,8 @@
 
     <depends>com.intellij.modules.java</depends>
     <depends>com.intellij.gradle</depends>
+    <!-- Its languages for access wideners, class tweakers and access transformers: their @Mc.Is is colored too. -->
+    <depends optional="true" config-file="fastmultiversion-minecraft-dev.xml">com.demonwav.minecraft-dev</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- File → New → Project → Generators → FastMultiversion. -->
@@ -43,6 +45,15 @@
                          enabledByDefault="true"
                          level="WARNING"
                          implementationClass="cc.gahaha.fastmultiversion.intellij.McUnusedImportInspection"/>
+        <!-- No language: access wideners and transformers are text, or the Minecraft Development plugin's languages. -->
+        <localInspection shortName="McAccessFile"
+                         displayName="Access widener or transformer entry for versions that lack its target"
+                         groupName="FastMultiversion"
+                         enabledByDefault="true"
+                         level="ERROR"
+                         implementationClass="cc.gahaha.fastmultiversion.intellij.McAccessFileInspection"/>
+        <fileTypeOverrider implementation="cc.gahaha.fastmultiversion.intellij.AccessFileTypeOverrider"/>
+        <annotator language="TEXT" implementationClass="cc.gahaha.fastmultiversion.intellij.AccessFileAnnotator"/>
         <daemon.highlightInfoFilter implementation="cc.gahaha.fastmultiversion.intellij.InactiveCodeHighlightFilter"/>
         <annotator language="JAVA" implementationClass="cc.gahaha.fastmultiversion.intellij.InactiveNamesAnnotator"/>
 

@@ -114,7 +114,7 @@ public class VersionViewTest extends UsefulTestCase {
                 public final class Mc { private Mc() {} public static boolean is(String range) { return false; } public @interface Is { String value(); } }
                 """);
         MultiversionProject.getInstance(myFixture.getProject()).setForTests(database, McVersion.parse("26.2"));
-        myFixture.enableInspections(new McApiRangeInspection(), new McUnusedImportInspection());
+        myFixture.enableInspections(new McApiRangeInspection(), new McUnusedImportInspection(), new McAccessFileInspection());
     }
 
     @Override
@@ -609,6 +609,80 @@ public class VersionViewTest extends UsefulTestCase {
                 }
                 """);
         assertEmpty(unusedImports());
+    }
+
+    public void testChecksAccessWidenersAgainstTheVersionsOfEachLine() {
+        // mc.Options and Minecraft.setScreen only exist in 26.1, Minecraft.gui only in 26.2.
+        myFixture.configureByText("testmod.accesswidener", """
+                accessWidener v2 official
+                accessible class mc/Options
+                accessible method mc/Minecraft setScreen (Lmc/Screen;)V  # @Mc.Is("[26.1,26.2)")
+                accessible field mc/Minecraft gui Lmc/Gui;  # only since 26.2 @Mc.Is("[26.1,)")
+                accessible field mc/Minecraft nope I
+                accessible class mc/Screen  # @Mc.Is("[26.3")
+                accessible class mc/Screen  # @Mc.Is("[27.1,)")
+                """);
+        List<HighlightInfo> errors = errors();
+        assertError(errors, "accessible class mc/Options", "'mc.Options' only exists in [26.1,26.2), but this line applies to [26.1,).");
+        assertError(errors, "accessible field mc/Minecraft gui Lmc/Gui;", "'Minecraft.gui' only exists in [26.2,), but this line applies to [26.1,).");
+        assertError(errors, "accessible field mc/Minecraft nope I", "'Minecraft.nope' does not exist in any version");
+        assertError(errors, "[26.3", "Version range '[26.3' is missing ']' or ')'.");
+        assertEquals(describe(errors), 4, errors.size());
+        List<HighlightInfo> warnings = myFixture.doHighlighting(HighlightSeverity.WARNING);
+        assertTrue(describe(warnings), warnings.stream().anyMatch(info -> text(info).equals("[27.1,)")
+                && info.getDescription().startsWith("'[27.1,)' matches none of the versions this project builds (26.1, 26.2)")));
+
+        myFixture.getEditor().getCaretModel().moveToOffset(myFixture.getFile().getText().indexOf("mc/Options"));
+        myFixture.launchAction(myFixture.findSingleIntention("Add # @Mc.Is(\"[26.1,26.2)\")"));
+        myFixture.getEditor().getCaretModel().moveToOffset(myFixture.getFile().getText().indexOf("gui Lmc"));
+        myFixture.launchAction(myFixture.findSingleIntention("Change to # @Mc.Is(\"[26.2,)\")"));
+        String text = myFixture.getFile().getText();
+        assertTrue(text, text.contains("accessible class mc/Options  # @Mc.Is(\"[26.1,26.2)\")\n"));
+        assertTrue(text, text.contains("accessible field mc/Minecraft gui Lmc/Gui;  # only since 26.2 @Mc.Is(\"[26.2,)\")\n"));
+        assertEquals(describe(errors()), 2, errors().size()); // nope and the broken range
+    }
+
+    public void testChecksTheRangeOfEveryLineAndColorsItAsJava() {
+        // The build reads every line's range, also in a comment of its own; the header must stay in every version.
+        myFixture.configureByText("testmod.classtweaker", """
+                classTweaker v1 official  # @Mc.Is("[26.2,)")
+                # only in 26.1 @Mc.Is("[26.2")
+                accessible class mc/Screen  # @Mc.Is("[26.2,)") moved
+                """);
+        List<HighlightInfo> errors = errors();
+        assertError(errors, "@Mc.Is(\"[26.2,)\")", "Every version needs the header");
+        assertError(errors, "[26.2", "Version range '[26.2' is missing ']' or ')'.");
+        assertEquals(describe(errors), 2, errors.size());
+
+        // As Java colors @Mc.Is("...") (keys: the color scheme decides), in a comment colored as a Java comment.
+        List<HighlightInfo> infos = myFixture.doHighlighting();
+        String line = "accessible class mc/Screen  # @Mc.Is(\"[26.2,)\") moved";
+        assertEquals(JavaHighlightingColors.LINE_COMMENT, key(info(infos, line, "# ")));
+        assertEquals(JavaHighlightingColors.ANNOTATION_NAME_ATTRIBUTES, key(info(infos, line, "@Mc.Is")));
+        assertEquals(JavaHighlightingColors.PARENTHESES, key(info(infos, line, "(")));
+        assertEquals(JavaHighlightingColors.STRING, key(info(infos, line, "\"[26.2,)\"")));
+        assertEquals(JavaHighlightingColors.PARENTHESES, key(info(infos, "\") moved", ")")));
+        assertEquals(JavaHighlightingColors.LINE_COMMENT, key(info(infos, "\") moved", " moved")));
+    }
+
+    public void testChecksAccessTransformersAgainstTheVersionsOfEachLine() {
+        // NeoForge skips an entry whose target a version lacks: warnings.
+        myFixture.configureByText("accesstransformer.cfg", """
+                # Minecraft's screen
+                public mc.Minecraft gui # @Mc.Is("[26.2,)")
+                public mc.Minecraft setScreen(Lmc/Screen;)V
+                public-f mc.Minecraft options
+                public mc.Options *()
+                public mc.Screen
+                """);
+        List<HighlightInfo> problems = myFixture.doHighlighting(HighlightSeverity.WARNING).stream()
+                .filter(info -> info.getDescription() != null && info.getDescription().contains(" only exists in ")).toList();
+        assertEquals(describe(problems), List.of("public mc.Minecraft setScreen(Lmc/Screen;)V", "public-f mc.Minecraft options",
+                "public mc.Options *()"), problems.stream().sorted(java.util.Comparator.comparingInt(HighlightInfo::getStartOffset))
+                .map(this::text).toList());
+        assertTrue(describe(problems), problems.stream().allMatch(info -> info.getSeverity() == HighlightSeverity.WARNING));
+        assertTrue(describe(problems), problems.stream().anyMatch(info -> info.getDescription().startsWith(
+                "'Minecraft.setScreen(Lmc/Screen;)V' only exists in [26.1,26.2), but this line applies to [26.1,).")));
     }
 
     public void testReloadingTheSetupRebuildsTheViews() {
