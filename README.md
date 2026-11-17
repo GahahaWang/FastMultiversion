@@ -221,9 +221,19 @@ def mc = multiversion.version
 
 loom {
     runs {
+        configureEach {
+            ideConfigGenerated(true)                    // a run configuration per version...
+            appendProjectPathToDisplayName = false      // ...named "Fabric Client 26.3", not "... (:26.3:fabric)"
+        }
         client {
             client()
-            ideConfigGenerated(multiversion.active)    // run configurations for the active version only
+            setConfigName("Fabric Client ${mc}")
+            runDir('runs/client')
+        }
+        server {
+            server()
+            setConfigName("Fabric Server ${mc}")
+            runDir('runs/server')
         }
     }
 }
@@ -234,6 +244,23 @@ dependencies {
     implementation "net.fabricmc.fabric-api:fabric-api:${project.property("mc.${mc}.fabric_api")}"
 }
 ```
+
+With ModDevGradle, name each version's runs with `ideName`:
+
+```groovy
+neoForge {
+    runs {
+        configureEach {
+            ideName = "NeoForge ${it.name.capitalize()} ${mc}"   // "NeoForge Client 26.3"
+        }
+        client { client() }
+        server { server() }
+    }
+}
+```
+
+Loom's run configurations run the game through Gradle, which builds that version with all the sources, so every
+version's configuration works, not only the active one's.
 
 Dependency versions that change with Minecraft fit well in `gradle.properties`, one key per version:
 
@@ -495,3 +522,8 @@ With the FastMultiversion plugin installed:
   versions.
 - An import of a class the active version does not have, or whose name an earlier import already takes, is
   shown as unused only if no version uses it.
+- After a Gradle sync, run configurations of what the sync removed go: of modules that are gone, and Loom's of
+  `runClient`, `runServer`, ... in projects that are no version projects (e.g. of a version the mod dropped).
+  Loom and ModDevGradle never remove theirs.
+- Access widener, class tweaker and access transformer entries are checked against the versions that get them.
+  Without the Minecraft Development plugin, these files open as text.

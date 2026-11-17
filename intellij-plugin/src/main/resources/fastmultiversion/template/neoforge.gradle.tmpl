@@ -25,11 +25,9 @@ repositories {
 neoForge {
     version = dep('neoforge')
     runs {
+        // A run configuration per version, e.g. "NeoForge Client 26.3".
         configureEach {
             ideName = "NeoForge ${it.name.capitalize()} ${mc}"
-            if (!multiversion.active) {
-                disableIdeRun()
-            }
         }
         client {
             client()
