@@ -104,9 +104,7 @@ With the IntelliJ plugin installed, choose **File → New → Project…**, then
 - the Minecraft versions: tick them in the list of every Minecraft version from 26.1 on, read from Mojang's
   version list. **Show snapshots** adds snapshots, pre-releases and release candidates;
 - the loaders: Fabric, NeoForge or both. With both, the main loader: the common projects compile the shared code
-  against Minecraft as its Gradle plugin sets it up (Loom, or ModDevGradle's NeoForm), and the project starts with
-  one file of access changes in its format (`src/main/resources/<mod id>.classtweaker`, or
-  `src/main/resources/META-INF/accesstransformer.cfg`), which the other loader gets converted;
+  against Minecraft as its Gradle plugin sets it up (Loom, or ModDevGradle's NeoForm);
 - the license, one of those the Minecraft Development plugin offers or CC BY 4.0: it goes into `fabric.mod.json`,
   `neoforge.mods.toml` and a `LICENSE` file (with the year and the authors, or the mod's name);
 - under **Optional Settings**, the description, the authors (separated by commas), the website, the repository and
@@ -118,10 +116,22 @@ imports it. With both loaders, shared code goes in `src/main` and each loader's 
 the project has no loader projects (one project per version, running `gradle/version/version.gradle`), and all
 code is in `src/main`, where the mod's main class is also the loader's entrypoint.
 
-The wizard looks up the newest releases of Fabric Loom, ModDevGradle and Fabric Loader, and Fabric API and
-NeoForge for each Minecraft version. What it reads online (also Mojang's version list) is kept in the IDE's system
-directory: offline, the wizard uses what it read last time, and only before it ever read them the versions the
-plugin ships. What it cannot find at all is marked `UNKNOWN` in `gradle.properties`.
+Every new project also has, in `src/main`:
+
+- one empty file of access changes in the format of its loader, or its main loader:
+  `src/main/resources/<mod id>.classtweaker` (Fabric) or `src/main/resources/META-INF/accesstransformer.cfg`
+  (NeoForge). The other loader gets it converted (see
+  [Access wideners, class tweakers and access transformers](#access-wideners-class-tweakers-and-access-transformers)),
+  and the build scripts write down what Loom and ModDevGradle get: `accessWidenerPath = multiversion.accessWidener`,
+  `accessTransformers = multiversion.accessTransformers`;
+- an empty mixin package, `<package>.mixin`, and its config `<mod id>.mixins.json`, which `fabric.mod.json` and
+  `neoforge.mods.toml` name. With both loaders, the common projects compile against Mixin and MixinExtras, so that
+  the shared code can have mixins too.
+
+The wizard looks up the newest releases of Fabric Loom, ModDevGradle, Fabric Loader, Mixin and MixinExtras, and
+Fabric API, NeoForge and NeoForm for each Minecraft version. What it reads online (also Mojang's version list) is
+kept in the IDE's system directory: offline, the wizard uses what it read last time, and only before it ever read
+them the versions the plugin ships. What it cannot find at all is marked `UNKNOWN` in `gradle.properties`.
 
 The project uses the newest Gradle plugin of the IntelliJ plugin's channel: `maven` with `latest.release`, or for a pre-release `maven-dev` with
 `latest.integration`; for an IntelliJ plugin built from source, its version from `mavenLocal()`.
@@ -217,7 +227,9 @@ one version. The `multiversion` object describes the project being configured:
 | `multiversion.active` | Whether this is the version the IDE works with |
 | `multiversion.versions` | All versions |
 | `multiversion.is('[26.2,)')` | Whether this project's version is in the range |
-| `multiversion.versioned('src/fabric/resources/mymod.classtweaker')` | This version's copy of an access widener, class tweaker or access transformer (see [Access wideners, class tweakers and access transformers](#access-wideners-class-tweakers-and-access-transformers)) |
+| `multiversion.accessWidener` | The access widener made from all the access files among the project's resources, with this version's lines: Loom's `accessWidenerPath` by default (see [Access wideners, class tweakers and access transformers](#access-wideners-class-tweakers-and-access-transformers)) |
+| `multiversion.accessTransformers` | The same as an access transformer: ModDevGradle's access transformers by default |
+| `multiversion.versioned('src/fabric/resources/mymod.classtweaker')` | This version's copy of one access widener, class tweaker or access transformer, nothing merged or converted |
 
 ```groovy
 apply plugin: 'net.fabricmc.fabric-loom'
@@ -456,8 +468,19 @@ An access transformer names a field without its type, and `*` and `*()` stand fo
 an access widener names each member with its descriptor. FastMultiversion reads those from Minecraft's classes, as
 Loom has them.
 
-To set Loom's or ModDevGradle's file yourself instead, use `multiversion.versioned`, whose path is relative to the
-root directory. It filters only that file, for the version:
+The made files are Loom's and ModDevGradle's by default. To write that down in a build script:
+
+```groovy
+loom {
+    accessWidenerPath = multiversion.accessWidener
+}
+neoForge {
+    accessTransformers = multiversion.accessTransformers
+}
+```
+
+To give them one file as it is instead, use `multiversion.versioned`, whose path is relative to the root directory.
+It filters only that file, for the version, and the jar still gets the made one:
 
 ```groovy
 loom {

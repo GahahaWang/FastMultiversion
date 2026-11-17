@@ -12,8 +12,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
@@ -25,8 +27,11 @@ import org.gradle.api.GradleException;
 import org.gradle.api.Project;
 import org.gradle.api.Transformer;
 import org.gradle.api.file.ConfigurableFileCollection;
+import org.gradle.api.file.FileCollection;
 import org.gradle.api.file.FileCopyDetails;
+import org.gradle.api.file.RegularFile;
 import org.gradle.api.file.RegularFileProperty;
+import org.gradle.api.provider.Provider;
 import org.gradle.language.jvm.tasks.ProcessResources;
 
 /**
@@ -64,7 +69,7 @@ final class VersionedFiles {
     private final List<File> resourceDirs;
     private Format format = Format.AS_THEY_ARE;
     private Object loom;
-    private Optional<File> made;
+    private final Map<Format, Optional<File>> made = new EnumMap<>(Format.class);
 
     VersionedFiles(Project project, McVersion version, String loader, boolean common) {
         this.project = project;
@@ -85,7 +90,7 @@ final class VersionedFiles {
                 if (path != null && format == Format.AS_THEY_ARE) {
                     format = Format.ACCESS_WIDENER;
                     loom = extension;
-                    path.convention(project.getLayout().file(project.provider(() -> made().orElse(null))));
+                    path.convention(accessWidener());
                 }
             });
         }
@@ -94,7 +99,7 @@ final class VersionedFiles {
             ConfigurableFileCollection files = call(accessTransformers, "getFiles", ConfigurableFileCollection.class);
             if (files != null && format == Format.AS_THEY_ARE) {
                 format = Format.ACCESS_TRANSFORMER;
-                files.convention(project.provider(() -> made().map(List::of).orElse(List.of())));
+                files.convention(accessTransformers());
             }
         });
         // Once the build script applied its loader plugin: what the jar gets depends on it.
@@ -104,8 +109,9 @@ final class VersionedFiles {
             if (format == Format.AS_THEY_ARE) {
                 task.eachFile(new FilterVersionedFile(version.toString()));
             } else {
-                File made = madeDir();
-                task.from(project.provider(() -> made().isPresent() ? made : List.of()));
+                Format format = this.format;
+                File made = madeDir(format);
+                task.from(project.provider(() -> made(format).isPresent() ? made : List.of()));
                 task.eachFile(new OnlyTheMadeOne(made.getAbsolutePath()));
             }
         }));
@@ -127,16 +133,26 @@ final class VersionedFiles {
         return target.toFile();
     }
 
-    /** The access widener or access transformer made from all the files, for the project's loader; written once. */
-    private synchronized Optional<File> made() {
-        if (made == null) {
-            made = Optional.ofNullable(make());
-        }
-        return made;
+    /**
+     * The access widener made from all the files, with this version's lines: what Loom's {@code accessWidenerPath} is
+     * by default; none without such files.
+     */
+    Provider<RegularFile> accessWidener() {
+        return project.getLayout().file(project.provider(() -> made(Format.ACCESS_WIDENER).orElse(null)));
     }
 
-    private File make() {
-        File dir = madeDir();
+    /** The access transformer made from all the files, as ModDevGradle's access transformers are by default. */
+    FileCollection accessTransformers() {
+        return project.files(project.provider(() -> made(Format.ACCESS_TRANSFORMER).map(List::of).orElse(List.of())));
+    }
+
+    /** The access widener or access transformer made from all the files; written once. */
+    private synchronized Optional<File> made(Format format) {
+        return made.computeIfAbsent(format, f -> Optional.ofNullable(make(f)));
+    }
+
+    private File make(Format format) {
+        File dir = madeDir(format);
         delete(dir.toPath());
         List<File> sources = found(name -> true);
         if (sources.isEmpty() || format == Format.AS_THEY_ARE) {
@@ -218,8 +234,8 @@ final class VersionedFiles {
         return kept;
     }
 
-    private File madeDir() {
-        return project.getLayout().getBuildDirectory().dir("multiversion/access").get().getAsFile();
+    private File madeDir(Format format) {
+        return project.getLayout().getBuildDirectory().dir("multiversion/access/" + format.name().toLowerCase(Locale.ROOT)).get().getAsFile();
     }
 
     /** Where under {@code build/multiversion/versioned/} a copy goes: by resource directory and the path in it, so that names never clash. */

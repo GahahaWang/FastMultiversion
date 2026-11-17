@@ -59,15 +59,6 @@ object ProjectGenerator {
         if (settings.common) {
             write("gradle/common/common.gradle", if (settings.neoFormCommon) "common-neoforge.gradle" else "common.gradle")
             write("src/main/java/$sources/${settings.modClass}.java", "Mod.java")
-            // The one file of access changes, in the main loader's format; FastMultiversion converts it for the other.
-            if (settings.neoFormCommon) {
-                Files.createDirectories(dir.resolve("src/main/resources/META-INF"))
-                Files.writeString(dir.resolve("src/main/resources/META-INF/accesstransformer.cfg"), ACCESS_COMMENT.replace("{{other}}", "Fabric an access widener"))
-            } else {
-                Files.createDirectories(dir.resolve("src/main/resources"))
-                Files.writeString(dir.resolve("src/main/resources/${settings.modId}.classtweaker"),
-                    "classTweaker v1 official\n" + ACCESS_COMMENT.replace("{{other}}", "NeoForge an access transformer"))
-            }
             if (settings.fabric) {
                 write("gradle/fabric/fabric.gradle", "fabric.gradle", mapOf("projects" to ":<version>:fabric"))
                 write("src/fabric/java/$sources/fabric/${settings.modClass}Fabric.java", "ModFabric.java")
@@ -87,16 +78,19 @@ object ProjectGenerator {
             write("src/main/java/$sources/${settings.modClass}.java", "NeoForgeMod.java")
             write("src/main/resources/META-INF/neoforge.mods.toml", "neoforge.mods.toml")
         }
+        // The one file of access changes, empty, in the main loader's format: FastMultiversion converts it for the other.
+        if (settings.accessTransformerMain) {
+            Files.createDirectories(dir.resolve("src/main/resources/META-INF"))
+            Files.writeString(dir.resolve("src/main/resources/META-INF/accesstransformer.cfg"), "")
+        } else {
+            Files.createDirectories(dir.resolve("src/main/resources"))
+            Files.writeString(dir.resolve("src/main/resources/${settings.modId}.classtweaker"), "classTweaker v1 official\n")
+        }
+        // An empty mixin package, and its config, which fabric.mod.json and neoforge.mods.toml name.
+        Files.createDirectories(dir.resolve("src/main/java/$sources/mixin"))
+        write("src/main/resources/${settings.modId}.mixins.json", "mixins.json")
         copyWrapper(dir)
     }
-
-    /** The top of the file of access changes, without an `@Mc.Is` range of its own (the IDE checks those). */
-    private val ACCESS_COMMENT = """
-        |# Access changes to Minecraft, for every loader and version: FastMultiversion gives {{other}} made
-        |# from this file. To give an entry to some versions only, end it with a comment holding @Mc.Is and a version range,
-        |# as in code.
-        |
-    """.trimMargin()
 
     /**
      * The `multiversion` block of settings.gradle: with several loaders, a project per version and loader; with
@@ -138,6 +132,8 @@ object ProjectGenerator {
             if (loom) add("fabric_loom_version=${versions.fabricLoom}")
             if (settings.neoforge) add("moddevgradle_version=${versions.modDevGradle}")
             if (settings.fabric) add("fabric_loader_version=${versions.fabricLoader}")
+            if (settings.common) add("mixin_version=${versions.mixin}")
+            if (settings.common) add("mixinextras_version=${versions.mixinExtras}")
         }
         val perVersion = settings.versions.joinToString("\n\n") { version ->
             buildList {
@@ -154,12 +150,9 @@ object ProjectGenerator {
                 }
             }.joinToString("\n")
         }
-        // With several loaders, Fabric gets the access widener FastMultiversion makes, under this name.
-        val accessWidener = when {
-            !settings.common -> null
-            settings.neoFormCommon -> "${settings.modId}.accesswidener"
-            else -> "${settings.modId}.classtweaker"
-        }
+        // Fabric gets the access widener FastMultiversion makes, under this name: the class tweaker's, or one made from
+        // the access transformer.
+        val accessWidener = if (settings.accessTransformerMain) "${settings.modId}.accesswidener" else "${settings.modId}.classtweaker"
         return mapOf(
             "projectName" to settings.projectName,
             "modId" to settings.modId,
@@ -175,7 +168,7 @@ object ProjectGenerator {
             // With one loader, the mod's own class is the entrypoint.
             "fabricEntrypoint" to if (settings.common) "${settings.group}.fabric.${settings.modClass}Fabric" else "${settings.group}.${settings.modClass}",
             "mcImport" to if (settings.versions.size > 1) "import cc.gahaha.fastmultiversion.Mc;\n" else "",
-            "accessWidenerEntry" to if (accessWidener == null) "" else "    \"accessWidener\": \"$accessWidener\",\n",
+            "accessWidenerEntry" to "    \"accessWidener\": \"$accessWidener\",\n",
             // fabric.mod.json and neoforge.mods.toml: the license and the optional settings.
             "licenseId" to settings.license.id,
             "modNameJson" to quoted(settings.modName),

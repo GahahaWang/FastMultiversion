@@ -52,6 +52,9 @@ data class ModSettings(
     /** The common projects use ModDevGradle's NeoForm (NeoForge is the main loader) rather than Loom. */
     val neoFormCommon: Boolean get() = common && mainLoader == "neoforge"
 
+    /** The mod's access changes are an access transformer (NeoForge is its loader or main loader), else a class tweaker. */
+    val accessTransformerMain: Boolean get() = if (common) mainLoader == "neoforge" else !fabric
+
     companion object {
         val LOADERS = listOf("fabric", "neoforge")
         private val MOD_ID = Regex("[a-z][a-z0-9_]{1,63}")

@@ -3,6 +3,7 @@ package cc.gahaha.fastmultiversion.intellij.wizard
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.exists
+import kotlin.io.path.isDirectory
 import kotlin.io.path.readText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -103,6 +104,8 @@ class WizardTest {
 
         val neoform = VersionLookup { RESPONSES[it] }.resolve(settings.copy(mainLoader = "neoforge")).neoform
         assertEquals(mapOf("26.1.2" to "26.1.2-1", "26.2" to "26.2-2", "26.3" to "26.3-1"), neoform) // not 26.3-rc-1-2
+        assertEquals("0.17.10+mixin.0.8.7", versions.mixin) // by Fabric's version, before the +
+        assertEquals("0.5.5", versions.mixinExtras)
     }
 
     @Test
@@ -165,7 +168,17 @@ class WizardTest {
         assertTrue(dir.resolve("src/fabric/resources/fabric.mod.json").readText().contains("\"com.example.testmod.fabric.TestModFabric\""))
         // Fabric is the main loader: the common projects use Loom, and the one file of access changes is a class tweaker.
         assertTrue(dir.resolve("gradle/common/common.gradle").readText().contains("net.fabricmc.fabric-loom"))
-        assertTrue(dir.resolve("src/main/resources/testmod.classtweaker").readText().startsWith("classTweaker v1 official\n# "))
+        assertEquals("classTweaker v1 official\n", dir.resolve("src/main/resources/testmod.classtweaker").readText())
+        assertMixins(dir, "src/fabric/resources/fabric.mod.json", "src/neoforge/resources/META-INF/neoforge.mods.toml")
+        // The scripts give Loom and ModDevGradle the access files FastMultiversion makes, and the common projects Mixin.
+        assertTrue(dir.resolve("gradle/fabric/fabric.gradle").readText().contains("    accessWidenerPath = multiversion.accessWidener\n"))
+        assertTrue(dir.resolve("gradle/neoforge/neoforge.gradle").readText().contains("    accessTransformers = multiversion.accessTransformers\n"))
+        val common = dir.resolve("gradle/common/common.gradle").readText()
+        assertTrue(common, common.contains("    accessWidenerPath = multiversion.accessWidener\n")
+            && common.contains("compileOnly \"net.fabricmc:sponge-mixin:\${mixin_version}\"")
+            && common.contains("compileOnly \"io.github.llamalad7:mixinextras-common:\${mixinextras_version}\""))
+        val gradleProperties = dir.resolve("gradle.properties").readText()
+        assertTrue(gradleProperties, gradleProperties.contains("mixin_version=0.17.5+mixin.0.8.7\nmixinextras_version=0.5.5\n"))
         assertFalse(dir.resolve("src/main/resources/META-INF/accesstransformer.cfg").exists())
         assertTrue(dir.resolve("src/fabric/resources/fabric.mod.json").readText().contains("\"accessWidener\": \"testmod.classtweaker\","))
         val properties = dir.resolve("gradle.properties").readText()
@@ -240,8 +253,9 @@ class WizardTest {
         val properties = dir.resolve("gradle.properties").readText()
         assertTrue(properties, properties.contains("mc.26.3.neoform=26.3-1") && properties.contains("mc.26.1.2.neoform=26.1.2-1"))
         val transformer = dir.resolve("src/main/resources/META-INF/accesstransformer.cfg").readText()
-        assertTrue(transformer, transformer.startsWith("# Access changes to Minecraft, for every loader and version: FastMultiversion gives Fabric"))
-        assertFalse(transformer, transformer.contains("@Mc.Is(\""))
+        assertEquals("", transformer)
+        assertTrue(common, common.contains("    accessTransformers = multiversion.accessTransformers\n")
+            && common.contains("compileOnly \"net.fabricmc:sponge-mixin:\${mixin_version}\""))
         assertFalse(dir.resolve("src/main/resources/testmod.classtweaker").exists())
         // Fabric gets an access widener made from it.
         assertTrue(dir.resolve("src/fabric/resources/fabric.mod.json").readText().contains("\"accessWidener\": \"testmod.accesswidener\","))
@@ -272,6 +286,11 @@ class WizardTest {
         assertTrue(mod, mod.contains("LOGGER.info(\"Test Mod for Minecraft 26.2\");") && !mod.contains("Mc"))
         val modJson = dir.resolve("src/main/resources/fabric.mod.json").readText()
         assertTrue(modJson, modJson.contains("\"com.example.testmod.TestMod\""))
+        assertEquals("classTweaker v1 official\n", dir.resolve("src/main/resources/testmod.classtweaker").readText())
+        assertTrue(modJson, modJson.contains("\"accessWidener\": \"testmod.classtweaker\","))
+        assertMixins(dir, "src/main/resources/fabric.mod.json", null)
+        assertTrue(script, script.contains("    accessWidenerPath = multiversion.accessWidener\n"))
+        assertFalse(dir.resolve("gradle.properties").readText().contains("mixin_version")) // no common projects
         assertNoPlaceholders(dir)
 
         val neoforge = both.copy(projectName = "NeoForgeOnly", versions = listOf("26.2", "26.3"), loaders = listOf("neoforge"))
@@ -282,11 +301,29 @@ class WizardTest {
         val neoBuild = neoDir.resolve("build.gradle").readText()
         assertTrue(neoBuild, neoBuild.contains("net.neoforged.moddev") && !neoBuild.contains("fabric-loom"))
         assertTrue(neoDir.resolve("gradle/version/version.gradle").readText().contains("net.neoforged.moddev"))
-        assertTrue(neoDir.resolve("src/main/resources/META-INF/neoforge.mods.toml").exists())
+        assertEquals("", neoDir.resolve("src/main/resources/META-INF/accesstransformer.cfg").readText())
+        assertFalse(neoDir.resolve("src/main/resources/testmod.classtweaker").exists())
+        assertMixins(neoDir, null, "src/main/resources/META-INF/neoforge.mods.toml")
+        assertTrue(neoDir.resolve("gradle/version/version.gradle").readText().contains("    accessTransformers = multiversion.accessTransformers\n"))
         val neoMod = neoDir.resolve("src/main/java/com/example/testmod/TestMod.java").readText()
         assertTrue(neoMod, neoMod.contains("@Mod(TestMod.MOD_ID)") && neoMod.contains("public TestMod() {"))
         assertTrue(neoMod, neoMod.contains("import cc.gahaha.fastmultiversion.Mc;") && neoMod.contains("if (Mc.is(\"[26.3,)\"))"))
         assertNoPlaceholders(neoDir)
+    }
+
+    /** An empty mixin package, its config, and the config named in the metadata files given. */
+    private fun assertMixins(dir: Path, fabricModJson: String?, modsToml: String?) {
+        assertTrue(dir.resolve("src/main/java/com/example/testmod/mixin").isDirectory())
+        val config = dir.resolve("src/main/resources/testmod.mixins.json").readText()
+        assertTrue(config, config.contains("\"package\": \"com.example.testmod.mixin\",") && config.contains("\"compatibilityLevel\": \"JAVA_25\","))
+        if (fabricModJson != null) {
+            val json = dir.resolve(fabricModJson).readText()
+            assertTrue(json, json.contains("    \"mixins\": [\n        \"testmod.mixins.json\"\n    ],\n"))
+        }
+        if (modsToml != null) {
+            val toml = dir.resolve(modsToml).readText()
+            assertTrue(toml, toml.contains("[[mixins]]\nconfig = \"testmod.mixins.json\"\n"))
+        }
     }
 
     private fun assertNoPlaceholders(dir: Path) {
@@ -322,6 +359,8 @@ class WizardTest {
             VersionLookup.FABRIC_API to metadata("0.161.0+26.2", "0.161.9+26.2", "0.161.10+26.2", "0.170.0+26.3", "0.170.1+26.4"),
             VersionLookup.NEOFORGE to metadata("26.2.0.93", "26.2.0.101", "26.2.0.110-beta", "26.1.2.126", "26.3.0.1-beta"),
             VersionLookup.NEOFORM to metadata("26.1.2-1", "26.2-1", "26.2-2", "26.3-rc-1-2", "26.3-1"),
+            VersionLookup.SPONGE_MIXIN to metadata("0.17.5+mixin.0.8.7", "0.17.10+mixin.0.8.7", "0.17.9+mixin.0.8.7"),
+            VersionLookup.MIXIN_EXTRAS to metadata("0.5.4", "0.5.5", "0.6.0-beta.1"),
         )
 
         const val MANIFEST = """{"versions": [{"id": "26.3", "type": "release"}, {"id": "26.2", "type": "release"}]}"""

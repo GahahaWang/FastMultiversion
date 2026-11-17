@@ -24,6 +24,9 @@ repositories {
 
 neoForge {
     version = dep('neoforge')
+    // The access changes among the project's resources, with this version's lines, as an access transformer: what
+    // FastMultiversion sets anyway, written down.
+    accessTransformers = multiversion.accessTransformers
     runs {
         // A run configuration per version, e.g. "NeoForge Client 26.3".
         configureEach {

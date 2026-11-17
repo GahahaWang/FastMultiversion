@@ -11,6 +11,9 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 loom {
+    // The access changes of src/main/resources, with this version's lines, as an access widener: what FastMultiversion
+    // sets anyway, written down.
+    accessWidenerPath = multiversion.accessWidener
     runs {
         configureEach {
             ideConfigGenerated(false)
@@ -20,4 +23,7 @@ loom {
 
 dependencies {
     minecraft "net.minecraft:minecraft:${multiversion.version}"
+    // Mixin for the shared code's mixins; at run time each loader brings its own.
+    compileOnly "net.fabricmc:sponge-mixin:${mixin_version}"
+    compileOnly "io.github.llamalad7:mixinextras-common:${mixinextras_version}"
 }

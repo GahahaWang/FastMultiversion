@@ -73,6 +73,9 @@ data class DependencyVersions(
     val neoforge: Map<String, String?>,
     /** Per Minecraft version: NeoForm, for common projects on ModDevGradle, e.g. `26.2-2`; `null` if none was found. */
     val neoform: Map<String, String?> = emptyMap(),
+    /** Mixin (Fabric's, which both loaders run) and MixinExtras, for the common projects' code, e.g. `0.17.5+mixin.0.8.7`. */
+    val mixin: String = VersionLookup.DEFAULTS.getProperty("mixin"),
+    val mixinExtras: String = VersionLookup.DEFAULTS.getProperty("mixinextras"),
 ) {
     /** What could not be found, to tell the user. */
     fun missing(settings: ModSettings): List<String> = settings.versions.flatMap { version ->
@@ -108,6 +111,8 @@ class VersionLookup(private val cache: ResponseCache = ResponseCache.NONE, priva
             neoform = if (!settings.neoFormCommon) emptyMap() else settings.versions.associateWith { version ->
                 newestNeoForm(neoformVersions, version) ?: DEFAULTS.getProperty("mc.$version.neoform")
             },
+            mixin = (if (settings.common) newestSpongeMixin(mavenVersions(SPONGE_MIXIN)) else null) ?: DEFAULTS.getProperty("mixin"),
+            mixinExtras = (if (settings.common) newestRelease(mavenVersions(MIXIN_EXTRAS)) else null) ?: DEFAULTS.getProperty("mixinextras"),
         )
     }
 
@@ -131,6 +136,8 @@ class VersionLookup(private val cache: ResponseCache = ResponseCache.NONE, priva
         const val FABRIC_API = "https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/maven-metadata.xml"
         const val NEOFORGE = "https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml"
         const val NEOFORM = "https://maven.neoforged.net/releases/net/neoforged/neoform/maven-metadata.xml"
+        const val SPONGE_MIXIN = "https://maven.fabricmc.net/net/fabricmc/sponge-mixin/maven-metadata.xml"
+        const val MIXIN_EXTRAS = "https://repo1.maven.org/maven2/io/github/llamalad7/mixinextras-common/maven-metadata.xml"
 
         /** The Gradle plugin markers: the versions of the plugin ids the build scripts apply. */
         const val FABRIC_LOOM = "https://maven.fabricmc.net/net/fabricmc/fabric-loom/net.fabricmc.fabric-loom.gradle.plugin/maven-metadata.xml"
@@ -146,6 +153,10 @@ class VersionLookup(private val cache: ResponseCache = ResponseCache.NONE, priva
         /** The newest release: no qualifier such as `-alpha.31` or `-beta`, e.g. `1.19.4` rather than `1.20.0-alpha.31`. */
         fun newestRelease(versions: List<String>): String? =
             versions.filter { '-' !in it }.maxWithOrNull(NUMBERS)
+
+        /** Fabric's Mixin builds name the Mixin they are based on after a '+': `0.17.5+mixin.0.8.7`. */
+        fun newestSpongeMixin(versions: List<String>): String? =
+            versions.filter { '-' !in it }.maxWithOrNull(compareBy(NUMBERS) { it.substringBefore('+') })
 
         /** NeoForm builds are their Minecraft version and a build number: `26.2-2`, newer than `26.2-1`. */
         fun newestNeoForm(versions: List<String>, minecraft: String): String? =

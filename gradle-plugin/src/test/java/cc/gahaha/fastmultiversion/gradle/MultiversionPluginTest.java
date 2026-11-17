@@ -321,6 +321,7 @@ class MultiversionPluginTest {
                         private final DataFiles accessTransformers;
                         @Inject public Extension(ObjectFactory objects) { accessTransformers = objects.newInstance(DataFiles.class); }
                         public DataFiles getAccessTransformers() { return accessTransformers; }
+                        public void setAccessTransformers(Object... files) { accessTransformers.getFiles().setFrom(files); }
                     }
                     public void apply(Project project) {
                         Extension extension = project.getExtensions().create("neoForge", Extension.class);
@@ -337,10 +338,12 @@ class MultiversionPluginTest {
                 """);
         write(project.resolve("fabric.gradle"), compile + """
                 apply plugin: 'net.fabricmc.fabric-loom'
+                loom { accessWidenerPath = multiversion.accessWidener }   // as by default, but written down
                 println "AW ${multiversion.version} ${loom.accessWidenerPath.get().asFile.name} ${loom.accessWidenerPath.get().asFile.text.replace('\\n', '|')}"
                 """);
         write(project.resolve("neoforge.gradle"), compile + """
                 apply plugin: 'net.neoforged.moddev'
+                neoForge { accessTransformers = multiversion.accessTransformers }   // likewise
                 println "AT ${multiversion.version} ${neoForge.accessTransformers.files.files.collect { it.text.replace('\\n', '|') }}"
                 println "VERSIONED ${multiversion.version} ${multiversion.versioned('src/main/resources/accessmod.classtweaker').text.replace('\\n', '|')}"
                 """);

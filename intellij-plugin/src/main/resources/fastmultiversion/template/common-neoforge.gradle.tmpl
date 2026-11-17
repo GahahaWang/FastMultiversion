@@ -13,8 +13,19 @@ tasks.withType(JavaCompile).configureEach {
 
 repositories {
     maven { url = "https://maven.neoforged.net/releases" }
+    maven { url = "https://maven.fabricmc.net/" }   // Mixin
+    mavenCentral()                                  // MixinExtras
 }
 
 neoForge {
     neoFormVersion = project.property("mc.${multiversion.version}.neoform")
+    // The access changes of src/main/resources, with this version's lines, as an access transformer: what
+    // FastMultiversion sets anyway, written down.
+    accessTransformers = multiversion.accessTransformers
+}
+
+dependencies {
+    // Mixin for the shared code's mixins; at run time each loader brings its own.
+    compileOnly "net.fabricmc:sponge-mixin:${mixin_version}"
+    compileOnly "io.github.llamalad7:mixinextras-common:${mixinextras_version}"
 }
