@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugins>
+    <plugin id="cc.gahaha.fastmultiversion" url="https://github.com/GahahaWang/FastMultiversion/releases/download/v1.2.0-dev.1/fastmultiversion-intellij-plugin-1.2.0-dev.1.zip" version="1.2.0-dev.1">
+        <idea-version since-build="263"/>
+        <name>FastMultiversion</name>
+        <vendor>gahaha</vendor>
+        <description><![CDATA[Minecraft mods for several Minecraft versions and loaders from one source tree.]]></description>
+        <change-notes><![CDATA[<a href="https://github.com/GahahaWang/FastMultiversion/releases/tag/v1.2.0-dev.1">Release notes of 1.2.0-dev.1</a>]]></change-notes>
+    </plugin>
+</plugins>

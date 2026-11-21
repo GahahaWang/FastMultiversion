@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FastMultiversion repositories</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  code, pre { background: #f2f2f2; border-radius: 3px; }
+  code { padding: 0.1rem 0.3rem; }
+  pre { padding: 0.75rem; overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>FastMultiversion</h1>
+<p>Build one Minecraft mod for several Minecraft versions and loaders.
+See <a href="https://github.com/GahahaWang/FastMultiversion">GitHub</a> for how to use it.</p>
+
+<h2>Gradle plugin</h2>
+<p>In <code>settings.gradle</code>, the newest release (now 1.1.1):</p>
+<pre>pluginManagement {
+    repositories {
+        maven { url = 'https://gahahawang.github.io/FastMultiversion/maven' }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+plugins {
+    id 'cc.gahaha.fastmultiversion' version 'latest.release'
+}</pre>
+<p>Or the dev channel, the newest pre-release or release, whichever is newer (now 1.2.0-dev.1): the repository
+<code>https://gahahawang.github.io/FastMultiversion/maven-dev</code> with <code>version 'latest.integration'</code>.</p>
+
+<h2>IntelliJ IDEA plugin</h2>
+<p>Install it from a <a href="https://github.com/GahahaWang/FastMultiversion/releases">release</a>. It then
+adds its channel's repository to IntelliJ IDEA, which offers its updates. To add one by hand:
+<b>Settings → Plugins → ⚙ → Manage Plugin Repositories…</b>, then <code>https://gahahawang.github.io/FastMultiversion/updatePlugins.xml</code>, or
+<code>https://gahahawang.github.io/FastMultiversion/updatePlugins-dev.xml</code> for the dev channel.</p>
+</body>
+</html>

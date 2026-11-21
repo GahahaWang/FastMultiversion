@@ -1,0 +1,90 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "cc.gahaha",
+    "module": "gradle-plugin",
+    "version": "1.1.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.9.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 25,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "gradle-plugin-1.1.0.jar",
+          "url": "gradle-plugin-1.1.0.jar",
+          "size": 155285,
+          "sha512": "377408778605f1a9a2cf27d7f379b9260af4d9827b10d863941e2af093b3cfec4a9c2eb3418d2515ad495ae22118a15e62abf7531aa1b2e41d0beb811ad79fe4",
+          "sha256": "2ab8f52eee634d1ad5f7a0eb58c8d8873584e614525daebe437cb38ba35d0b37",
+          "sha1": "dc7a195d8a0e6afd4c7e1344ae00c6857be9a6ce",
+          "md5": "b0c0ab6a8814674bd161d6b1cac8a777"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 25,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "cc.gahaha",
+          "module": "apidb-generator",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "cc.gahaha",
+          "module": "apidb",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "cc.gahaha",
+          "module": "versioning",
+          "version": {
+            "requires": "1.1.0"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm",
+          "version": {
+            "requires": "9.11.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "gradle-plugin-1.1.0.jar",
+          "url": "gradle-plugin-1.1.0.jar",
+          "size": 155285,
+          "sha512": "377408778605f1a9a2cf27d7f379b9260af4d9827b10d863941e2af093b3cfec4a9c2eb3418d2515ad495ae22118a15e62abf7531aa1b2e41d0beb811ad79fe4",
+          "sha256": "2ab8f52eee634d1ad5f7a0eb58c8d8873584e614525daebe437cb38ba35d0b37",
+          "sha1": "dc7a195d8a0e6afd4c7e1344ae00c6857be9a6ce",
+          "md5": "b0c0ab6a8814674bd161d6b1cac8a777"
+        }
+      ]
+    }
+  ]
+}
