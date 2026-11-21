@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.gradle.api.NamedDomainObjectProvider;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -67,7 +68,7 @@ public abstract class MultiversionRootPlugin implements Plugin<Project> {
         for (MultiversionLayout.Target target : layout.targets(loader)) {
             String id = "multiversionApiPart" + target.path().replaceAll("[^A-Za-z0-9]+", "_");
             NamedDomainObjectProvider<DependencyScopeConfiguration> part = root.getConfigurations().dependencyScope(id);
-            root.getDependencies().add(part.getName(), root.getDependencyFactory().create(root.project(target.path())));
+            root.getDependencies().add(part.getName(), root.getDependencies().project(Map.of("path", target.path())));
             partFiles.add(root.getConfigurations().resolvable(id + "Files", c -> {
                 c.extendsFrom(part.get());
                 c.getAttributes().attribute(Usage.USAGE_ATTRIBUTE,

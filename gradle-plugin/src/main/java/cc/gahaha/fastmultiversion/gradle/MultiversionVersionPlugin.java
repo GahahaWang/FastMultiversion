@@ -2,6 +2,7 @@ package cc.gahaha.fastmultiversion.gradle;
 
 import cc.gahaha.fastmultiversion.versioning.McVersion;
 import java.io.File;
+import java.util.Map;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.artifacts.ProjectDependency;
@@ -70,8 +71,8 @@ public abstract class MultiversionVersionPlugin implements Plugin<Project> {
             // In the IDE the loader projects see src/main through the common project, which has no loader:
             // NeoForge code sees the shared code but nothing of Fabric. Not transitive, so the common
             // project's libraries stay out too; builds compile src/main in every project and need none of this.
-            ProjectDependency common = project.getDependencyFactory().create(
-                    project.project(":" + version.getVersion() + ":" + MultiversionLayout.COMMON));
+            ProjectDependency common = (ProjectDependency) project.getDependencies().project(
+                    Map.of("path", ":" + version.getVersion() + ":" + MultiversionLayout.COMMON));
             common.setTransitive(false);
             project.getDependencies().add(JavaPlugin.COMPILE_ONLY_CONFIGURATION_NAME, common);
         }

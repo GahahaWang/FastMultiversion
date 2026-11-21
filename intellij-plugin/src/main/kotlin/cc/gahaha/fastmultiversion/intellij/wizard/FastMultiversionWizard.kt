@@ -15,6 +15,7 @@ import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.PathManager
+import com.intellij.openapi.components.service
 import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.CheckBoxList
@@ -36,7 +37,6 @@ import com.intellij.util.io.HttpRequests
 import java.io.IOException
 import java.nio.file.Path
 import javax.swing.Icon
-import org.jetbrains.plugins.gradle.service.project.open.linkAndRefreshGradleProject
 
 /** File → New → Project → FastMultiversion: a Minecraft mod for several Minecraft versions and loaders. */
 class FastMultiversionWizard : GeneratorNewProjectWizard {
@@ -191,7 +191,7 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
         }
         ProjectGenerator.generate(dir, settings, versions, PluginRepository.of(pluginVersion))
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(dir)
-        linkAndRefreshGradleProject(dir.toString(), project)
+        project.service<GradleLinking>().linkAndSync(dir)
         warnAboutGaps(project, settings, versions)
     }
 
