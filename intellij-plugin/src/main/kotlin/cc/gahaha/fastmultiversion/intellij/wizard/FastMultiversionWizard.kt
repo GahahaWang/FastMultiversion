@@ -57,7 +57,8 @@ class FastMultiversionWizard : GeneratorNewProjectWizard {
 class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWizardStep(parent) {
     private val modIdProperty = propertyGraph.lazyProperty { ModSettings.suggestModId(baseData?.name ?: "") }
     private val modNameProperty = propertyGraph.lazyProperty { baseData?.name ?: "My Mod" }
-    private val groupProperty = propertyGraph.lazyProperty { "com.example." + modIdProperty.get() }
+    private val packagePrefix = WizardMemory.packagePrefix
+    private val groupProperty = propertyGraph.lazyProperty { ModSettings.suggestGroup(packagePrefix, modIdProperty.get()) }
     private val versionChoice = VersionChoice()
     private val versionList = CheckBoxList<String>()
     private val snapshotsProperty = propertyGraph.property(false)
@@ -67,7 +68,7 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
     private val mainLoaderProperty = propertyGraph.property("fabric")
     private val licenseProperty = propertyGraph.property(License.ALL_RIGHTS_RESERVED)
     private val descriptionProperty = propertyGraph.property("")
-    private val authorsProperty = propertyGraph.property("")
+    private val authorsProperty = propertyGraph.property(WizardMemory.authors)
     private val websiteProperty = propertyGraph.property("")
     private val repositoryProperty = propertyGraph.property("")
     private val issueTrackerProperty = propertyGraph.property("")
@@ -77,7 +78,7 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             modIdProperty.dependsOn(base.nameProperty, deleteWhenModified = true) { ModSettings.suggestModId(base.name) }
             modNameProperty.dependsOn(base.nameProperty, deleteWhenModified = true) { base.name }
         }
-        groupProperty.dependsOn(modIdProperty, deleteWhenModified = true) { "com.example." + modIdProperty.get() }
+        groupProperty.dependsOn(modIdProperty, deleteWhenModified = true) { ModSettings.suggestGroup(packagePrefix, modIdProperty.get()) }
         bothLoadersProperty.dependsOn(fabricProperty) { fabricProperty.get() && neoforgeProperty.get() }
         bothLoadersProperty.dependsOn(neoforgeProperty) { fabricProperty.get() && neoforgeProperty.get() }
         versionList.setCheckBoxListListener { index, ticked -> versionList.getItemAt(index)?.let { versionChoice.tick(it, ticked) } }
@@ -190,6 +191,7 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             lookUp.compute()
         }
         ProjectGenerator.generate(dir, settings, versions, PluginRepository.of(pluginVersion))
+        WizardMemory.remember(settings)
         LocalFileSystem.getInstance().refreshAndFindFileByNioFile(dir)
         project.service<GradleLinking>().linkAndSync(dir)
         warnAboutGaps(project, settings, versions)

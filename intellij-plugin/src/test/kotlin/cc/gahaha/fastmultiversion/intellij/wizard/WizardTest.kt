@@ -25,6 +25,11 @@ class WizardTest {
         assertTrue(ModSettings.checkModId("Test") != null)
         assertNull(ModSettings.checkGroup("com.example.test_mod"))
         assertTrue(ModSettings.checkGroup("com.Example") != null)
+        assertEquals("io.github.alex.mymod", ModSettings.suggestGroup("io.github.alex", "mymod"))
+        assertEquals("io.github.alex", ModSettings.packagePrefix("io.github.alex.mymod", "mymod"))
+        assertEquals("io.github.alex", ModSettings.packagePrefix("io.github.alex", "mymod")) // without the mod id
+        assertEquals("io.github.alex.tools", ModSettings.packagePrefix("io.github.alex.tools", "mymod"))
+        assertNull(ModSettings.packagePrefix("mymod", "mymod"))
         assertEquals(listOf("26.1.2", "26.2", "26.3"), ModSettings.parseVersions("26.3, 26.1.2 26.2").getOrThrow())
         assertTrue(ModSettings.parseVersions("1.21").exceptionOrNull()!!.message!!.contains("26.1 and newer"))
         assertTrue(ModSettings.parseVersions("26.2, 26.2").isFailure)

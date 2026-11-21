@@ -74,6 +74,23 @@ data class ModSettings(
         fun checkModId(modId: String): String? =
             if (MOD_ID.matches(modId)) null else "2 to 64 lower-case letters, digits and '_', starting with a letter"
 
+        /** The package prefix of a new mod until a project is created with another: `com.example.mymod`. */
+        const val DEFAULT_PACKAGE_PREFIX = "com.example"
+
+        /** A mod's package from a prefix: `io.github.alex` and `mymod` → `io.github.alex.mymod`. */
+        fun suggestGroup(prefix: String, modId: String): String = "$prefix.$modId"
+
+        /**
+         * The prefix of [group], for the next mods' packages: what comes before the mod id (`io.github.alex.mymod`
+         * → `io.github.alex`), or the whole package if it does not end with the mod id. `null` if the package is
+         * only the mod id.
+         */
+        fun packagePrefix(group: String, modId: String): String? = when {
+            group == modId -> null
+            group.endsWith(".$modId") -> group.removeSuffix(".$modId")
+            else -> group
+        }
+
         /** Why [group] is not a valid Java package, or `null`. */
         fun checkGroup(group: String): String? =
             if (PACKAGE.matches(group)) null else "A Java package in lower case, e.g. com.example.mymod"

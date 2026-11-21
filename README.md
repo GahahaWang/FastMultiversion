@@ -100,15 +100,16 @@ The plugin is then in `intellij-plugin/build/distributions/`.
 With the IntelliJ plugin installed, choose **File → New → Project…**, then **FastMultiversion** under
 **Generators**, and enter:
 
-- the mod ID, the mod name and the Java package;
+- the mod ID, the mod name and the Java package, `<prefix>.<mod id>`: the prefix is the one of the last project
+  the wizard created (`com.example` at first);
 - the Minecraft versions: tick them in the list of every Minecraft version from 26.1 on, read from Mojang's
   version list. **Show snapshots** adds snapshots, pre-releases and release candidates;
 - the loaders: Fabric, NeoForge or both. With both, the main loader: the common projects compile the shared code
   against Minecraft as its Gradle plugin sets it up (Loom, or ModDevGradle's NeoForm);
 - the license, one of those the Minecraft Development plugin offers or CC BY 4.0: it goes into `fabric.mod.json`,
   `neoforge.mods.toml` and a `LICENSE` file (with the year and the authors, or the mod's name);
-- under **Optional Settings**, the description, the authors (separated by commas), the website, the repository and
-  the issue tracker, for `fabric.mod.json` (`description`, `authors`, `contact`) and `neoforge.mods.toml`
+- under **Optional Settings**, the description, the authors (separated by commas; those of the last project that
+  had any), the website, the repository and the issue tracker, for `fabric.mod.json` (`description`, `authors`, `contact`) and `neoforge.mods.toml`
   (`description`, `authors`, `displayURL`, `issueTrackerURL`).
 
 The wizard creates the project described below, with a Gradle wrapper and a small mod for each loader, and
