@@ -1,0 +1,83 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "cc.gahaha",
+    "module": "apidb-generator",
+    "version": "1.2.0",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.9.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 25,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "apidb-generator-1.2.0.jar",
+          "url": "apidb-generator-1.2.0.jar",
+          "size": 22740,
+          "sha512": "40711dbedfd3e4dcca2cdcb429b579118f14d2d9d0163091ab2e2b2bba192e01039e645bf0883cd2b1654fec22b41ccb1808b5bd4381f0dbd7a0c36d71cf7606",
+          "sha256": "a6f1caaab9dd7c05796c5f92cd9839edf5a6276e634ca18267061e3062208c97",
+          "sha1": "2d719a15a74425fd8c5972e5d0faf9d6d14c837e",
+          "md5": "833e98a7ff3d3a05c98cf22ef675380d"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.version": 25,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "cc.gahaha",
+          "module": "apidb",
+          "version": {
+            "requires": "1.2.0"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm",
+          "version": {
+            "requires": "9.11.1"
+          }
+        },
+        {
+          "group": "org.ow2.asm",
+          "module": "asm-tree",
+          "version": {
+            "requires": "9.11.1"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "apidb-generator-1.2.0.jar",
+          "url": "apidb-generator-1.2.0.jar",
+          "size": 22740,
+          "sha512": "40711dbedfd3e4dcca2cdcb429b579118f14d2d9d0163091ab2e2b2bba192e01039e645bf0883cd2b1654fec22b41ccb1808b5bd4381f0dbd7a0c36d71cf7606",
+          "sha256": "a6f1caaab9dd7c05796c5f92cd9839edf5a6276e634ca18267061e3062208c97",
+          "sha1": "2d719a15a74425fd8c5972e5d0faf9d6d14c837e",
+          "md5": "833e98a7ff3d3a05c98cf22ef675380d"
+        }
+      ]
+    }
+  ]
+}
