@@ -1,6 +1,5 @@
 package cc.gahaha.fastmultiversion.intellij.wizard
 
-import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.ide.util.projectWizard.WizardContext
 import com.intellij.ide.wizard.AbstractNewProjectWizardStep
 import com.intellij.ide.wizard.GeneratorNewProjectWizard
@@ -16,7 +15,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.components.service
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.util.IconLoader
 import com.intellij.ui.CheckBoxList
 import com.intellij.ui.dsl.builder.COLUMNS_LARGE
@@ -34,6 +32,7 @@ import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.util.io.HttpRequests
+import cc.gahaha.fastmultiversion.intellij.update.PluginVersion
 import java.io.IOException
 import java.nio.file.Path
 import javax.swing.Icon
@@ -183,7 +182,7 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
             repository = repositoryProperty.get(),
             issueTracker = issueTrackerProperty.get(),
         )
-        val pluginVersion = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.version ?: "0.0.0-SNAPSHOT"
+        val pluginVersion = PluginVersion.current ?: "0.0.0-SNAPSHOT"
         val lookUp = ThrowableComputable<DependencyVersions, RuntimeException> { VersionLookup(CACHE, Fetcher(::readText)).resolve(settings) }
         val versions = if (ApplicationManager.getApplication().isDispatchThread) {
             ProgressManager.getInstance().runProcessWithProgressSynchronously(lookUp, "Looking up Fabric and NeoForge versions", false, project)
@@ -207,7 +206,6 @@ class FastMultiversionStep(parent: NewProjectWizardStep) : AbstractNewProjectWiz
     }
 
     private companion object {
-        const val PLUGIN_ID = "cc.gahaha.fastmultiversion"
         const val NOTIFICATIONS = "FastMultiversion"
         const val USER_AGENT = "FastMultiversion IntelliJ plugin"
         val LOADER_NAMES = mapOf("fabric" to "Fabric", "neoforge" to "NeoForge")

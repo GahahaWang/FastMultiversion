@@ -30,6 +30,7 @@ import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiParameter;
 import com.intellij.testFramework.IndexingTestUtil;
 import com.intellij.codeInspection.TextBlockMigrationInspection;
+import com.intellij.codeInspection.uncheckedWarnings.UncheckedWarningLocalInspection;
 import com.siyeh.ig.style.UnnecessarySemicolonInspection;
 import com.intellij.testFramework.UsefulTestCase;
 import com.intellij.testFramework.builders.JavaModuleFixtureBuilder;
@@ -374,6 +375,30 @@ public class VersionViewTest extends UsefulTestCase {
                 .filter(action -> action.getText().startsWith("Remove unnecessary semicolon")).findFirst()
                 .orElseThrow(() -> new AssertionError(myFixture.getAvailableIntentions().stream().map(a -> a.getText()).toList())));
         assertTrue(myFixture.getFile().getText(), myFixture.getFile().getText().contains("mc.setScreen(screen);\n"));
+    }
+
+    public void testRunsInspectionsThatUseTheSessionOfTheFileOnInactiveCode() {
+        // Unchecked warnings: an inspection that builds its visitor with the session the IDE makes for a file.
+        myFixture.enableInspections(new UncheckedWarningLocalInspection());
+        myFixture.configureByText("Unchecked.java", """
+                import cc.gahaha.fastmultiversion.Mc;
+                import java.util.*;
+                class Unchecked {
+                    static List<String> names() {
+                        if (Mc.is("[26.2,)")) {
+                            return new ArrayList<>();
+                        } else {
+                            List<String> names = new ArrayList();
+                            return names;
+                        }
+                    }
+                }
+                """);
+        List<HighlightInfo> warnings = myFixture.doHighlighting(HighlightSeverity.WARNING).stream()
+                .filter(info -> info.getSeverity() == HighlightSeverity.WARNING).toList();
+        int inactive = myFixture.getFile().getText().indexOf("ArrayList()");
+        assertTrue(describe(warnings), warnings.stream().anyMatch(info -> info.getStartOffset() == inactive
+                && info.getDescription().startsWith("[26.1] Unchecked assignment")));
     }
 
     public void testReportsUsesOfDeclarationsForOtherVersions() {

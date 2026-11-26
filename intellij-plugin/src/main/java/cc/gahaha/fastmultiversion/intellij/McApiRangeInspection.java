@@ -3,9 +3,7 @@ package cc.gahaha.fastmultiversion.intellij;
 import com.intellij.codeInsight.daemon.impl.HighlightInfo;
 import com.intellij.codeInsight.daemon.impl.HighlightVisitor;
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightInfoHolder;
-import com.intellij.codeInsight.daemon.impl.analysis.HighlightVisitorImpl;
 import com.intellij.codeInspection.AbstractBaseJavaLocalInspectionTool;
-import com.intellij.codeInspection.InspectionEngine;
 import com.intellij.codeInspection.LocalQuickFixOnPsiElement;
 import com.intellij.codeInspection.QuickFix;
 import com.intellij.codeInspection.ex.InspectionProfileImpl;
@@ -81,6 +79,7 @@ public final class McApiRangeInspection extends AbstractBaseJavaLocalInspectionT
     public static final String SHORT_NAME = "McApiRange";
     private static final Logger LOG = Logger.getInstance(McApiRangeInspection.class);
     private static final int MAX_IMPORT_FIXES = 5;
+    private static final String JAVA_HIGHLIGHT_VISITOR = "com.intellij.codeInsight.daemon.impl.analysis.HighlightVisitorImpl";
 
     /**
      * Marks the problems of the plugin's inspections for {@link InactiveCodeHighlightFilter}, which keeps them
@@ -336,8 +335,7 @@ public final class McApiRangeInspection extends AbstractBaseJavaLocalInspectionT
             if (tools.isEmpty()) {
                 return;
             }
-            Map<LocalInspectionToolWrapper, List<ProblemDescriptor>> found = InspectionEngine.inspectElements(
-                    tools, context.resolvedIn, context.resolvedIn.getTextRange(), true, holder.isOnTheFly(), elements, (tool, problem) -> true);
+            Map<LocalInspectionToolWrapper, List<ProblemDescriptor>> found = ElementInspections.run(tools, context.resolvedIn, elements, holder.isOnTheFly());
             found.forEach((tool, problems) -> {
                 for (ProblemDescriptor problem : problems) {
                     report(context, problem, severities.getOrDefault(tool.getShortName(), HighlightSeverity.WARNING));
@@ -402,13 +400,26 @@ public final class McApiRangeInspection extends AbstractBaseJavaLocalInspectionT
                     && reference.getReferenceNameElement() == at && reference.multiResolve(false).length == 0;
         }
 
+        /**
+         * The Java plugin's highlighting visitor, which reports the Java errors. Found by the name of its class, which
+         * is not part of the IDE's API: without it (if the Java plugin renamed it), the errors are not reported.
+         */
         private static @Nullable HighlightVisitor javaHighlightVisitor(PsiJavaFile file) {
             for (HighlightVisitor visitor : HighlightVisitor.EP_HIGHLIGHT_VISITOR.getExtensionList(file.getProject())) {
-                if (visitor instanceof HighlightVisitorImpl && visitor.suitableForFile(file)) {
+                if (isJavaHighlightVisitor(visitor.getClass()) && visitor.suitableForFile(file)) {
                     return visitor.clone();
                 }
             }
             return null;
+        }
+
+        private static boolean isJavaHighlightVisitor(@Nullable Class<?> type) {
+            for (; type != null; type = type.getSuperclass()) {
+                if (JAVA_HIGHLIGHT_VISITOR.equals(type.getName())) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         void overrides(PsiMethod method) {

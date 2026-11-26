@@ -1,7 +1,5 @@
 package cc.gahaha.fastmultiversion.intellij.update
 
-import com.intellij.ide.plugins.PluginManagerCore
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.updateSettings.impl.UpdateSettings
@@ -14,8 +12,7 @@ import com.intellij.openapi.updateSettings.impl.UpdateSettings
  */
 class PluginRepositoryRegistrar : ProjectActivity {
     override suspend fun execute(project: Project) {
-        val version = PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.version ?: return
-        val repository = repositoryFor(version) ?: return
+        val repository = repositoryFor(PluginVersion.current ?: return) ?: return
         val hosts = UpdateSettings.getInstance().storedPluginHosts
         hosts.removeAll(CHANNELS - repository)
         if (repository !in hosts) {
@@ -24,7 +21,6 @@ class PluginRepositoryRegistrar : ProjectActivity {
     }
 
     companion object {
-        const val PLUGIN_ID = "cc.gahaha.fastmultiversion"
         const val RELEASES = "https://gahahawang.github.io/FastMultiversion/updatePlugins.xml"
         const val DEV = "https://gahahawang.github.io/FastMultiversion/updatePlugins-dev.xml"
         private val CHANNELS = setOf(RELEASES, DEV)
