@@ -1,3 +1,9 @@
+## [1.2.0](https://github.com/GahahaWang/FastMultiversion/compare/v1.1.1...v1.2.0) (2026-11-26)
+
+### ✨ New Features
+
+* Remember the package prefix and the authors of the last new mod ([1a0b095](https://github.com/GahahaWang/FastMultiversion/commit/1a0b095c0767809f9084998e45292a182d798e88))
+
 ## [1.1.1](https://github.com/GahahaWang/FastMultiversion/compare/v1.1.0...v1.1.1) (2026-11-17)
 
 ### 🐛 Bug Fixes
